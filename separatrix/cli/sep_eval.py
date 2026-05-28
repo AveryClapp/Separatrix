@@ -87,6 +87,7 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None):
 
     visits = collections.Counter(base_trace)
     edge_div = collections.Counter()   # per-node control-flow divergence mass
+    val_div = collections.Counter()    # per-node value-distance mass (localized attribution)
     obs = []
     if corpus_dir:
         perts = load_corpus(corpus_dir)
@@ -109,11 +110,17 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None):
         # differs from baseline (where the trajectory actually diverges, not just
         # where it first diverges). Shared helper so the eval and the shipped tool
         # (sep_run.py) cannot drift on the signal that defines the contribution.
-        for src, mass in metric.localized_divergence(base_edges, metric.edge_multiset(trace)).items():
+        pert_edges = metric.edge_multiset(trace)
+        for src, mass in metric.localized_divergence(base_edges, pert_edges).items():
             edge_div[src] += mass
+        # value-localization: credit the value-distance v through the SAME node
+        # set, so value-vs-divergence isolates signal, not attribution method.
+        for src, val in metric.localized_value(base_edges, pert_edges, v).items():
+            val_div[src] += val
 
     universe = sorted(visits)
     return {"obs": obs, "visits": dict(visits), "edge_div": dict(edge_div),
+            "val_div": dict(val_div),
             "universe": universe, "perts": len(perts), "diverged": diverged,
             "base_len": len(base_trace), "base_out": base_out}
 
@@ -186,7 +193,8 @@ def main():
     scores = {
         "trajectory": pr.trajectory(camp["obs"], universe),       # first-bifurcation
         "divergence": pr.coverage(camp["edge_div"], universe),     # divergence-localization
-        "value": pr.value(camp["obs"], universe),
+        "value_localized": pr.coverage(camp["val_div"], universe), # value through the SAME localization (fair vs divergence)
+        "value_firstbif": pr.value(camp["obs"], universe),         # old first-bifurcation value attribution (kept for the record)
         "coverage": pr.coverage(camp["visits"], universe),
     }
     # random: average AUC/AP/p@k over N_RANDOM independent rankings
@@ -236,7 +244,7 @@ def main():
         print(f"\n== {lvl}-level ranking ({res['positives']} positive nodes) ==")
         print(f"  {'predictor':<12}{'AUC':>8}{'95%CI':>16}{'perm_p':>9}{'AP':>8}"
               f"{'p@1':>7}{'p@5':>7}{'p@10':>7}{'p@20':>7}")
-        for name in ("trajectory", "divergence", "value", "coverage", "random"):
+        for name in ("trajectory", "divergence", "value_localized", "value_firstbif", "coverage", "random"):
             m = res["predictors"][name]
             pa = m["precision_at"]
             ci = m.get("auc_ci")

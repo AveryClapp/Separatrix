@@ -45,6 +45,35 @@ def test_matches_sep_eval_inline_accumulation():
     assert metric.localized_divergence(base, pert) == expected
 
 
+def test_localized_value_credits_v_to_every_divergent_node():
+    # Same edge sets as test_credits_source_node_by_bucketed_delta: divergent
+    # source nodes are {2, 3}. localized_value credits the scalar v (not the
+    # delta) to each of those nodes -> {2: v, 3: v}.
+    base = metric.edge_multiset([1, 2, 3, 2, 3])
+    pert = metric.edge_multiset([1, 2, 4])
+    assert metric.localized_value(base, pert, 0.4) == {2: 0.4, 3: 0.4}
+
+
+def test_localized_value_node_set_matches_divergence():
+    # The credited node set MUST equal localized_divergence's node set — that
+    # identical attribution mechanism is the whole point (isolates value-vs-
+    # trajectory *signal* from attribution *method*).
+    base = metric.edge_multiset([5, 6, 7, 6, 7, 8])
+    pert = metric.edge_multiset([5, 6, 9, 9, 9])
+    assert set(metric.localized_value(base, pert, 1.0)) == set(metric.localized_divergence(base, pert))
+
+
+def test_localized_value_zero_v_credits_zero():
+    base = metric.edge_multiset([1, 2, 3, 2, 3])
+    pert = metric.edge_multiset([1, 2, 4])
+    assert metric.localized_value(base, pert, 0.0) == {2: 0.0, 3: 0.0}
+
+
+def test_localized_value_identical_traces_credit_nothing():
+    e = metric.edge_multiset([1, 2, 3, 2, 3])
+    assert metric.localized_value(e, e, 0.7) == {}
+
+
 def _run():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0

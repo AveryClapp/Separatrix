@@ -141,6 +141,19 @@ def localized_divergence(base_edges, pert_edges):
     return out
 
 
+def localized_value(base_edges, pert_edges, v):
+    """Per-node value-distance attribution for one perturbation. Credits the
+    scalar output-value distance `v` to every node where the trajectory diverges
+    (the SAME node set as localized_divergence), so a value predictor can be
+    attributed through the identical localization mechanism as the divergence
+    predictor — isolating trajectory-vs-value signal from attribution method."""
+    out = {}
+    for e in set(base_edges) | set(pert_edges):
+        if base_edges.get(e, 0) != pert_edges.get(e, 0):
+            out[e[0]] = v
+    return out
+
+
 def bifurcation_tok(a, b):
     """First differing token between two compressed sequences (None if equal)."""
     m = min(len(a), len(b))
