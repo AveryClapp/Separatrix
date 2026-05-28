@@ -11,12 +11,15 @@
 #define SEP_MAGMA_CANARY_H
 #include <limits.h>   /* INT_MAX, used by some canary conditions */
 
-void magma_log(const char *bug, int condition);
+void magma_log(const char *file, int line, int condition);
 static inline int magma_and(int a, int b) { return a && b; }
 static inline int magma_or(int a, int b) { return a || b; }
 
-#define MAGMA_LOG(b, c)   do { magma_log((b), (int)(c)); } while (0)
-#define MAGMA_LOG_V(b, c) (magma_log((b), (int)(c)))
+/* `b` is intentionally ignored — every site passes the same "%MAGMA_BUG%"
+ * literal, so it cannot identify which canary fired. __FILE__:__LINE__ is the
+ * discriminator, mapped back to a bug_id via bugs.json. */
+#define MAGMA_LOG(b, c)   do { magma_log(__FILE__, __LINE__, (int)(c)); } while (0)
+#define MAGMA_LOG_V(b, c) (magma_log(__FILE__, __LINE__, (int)(c)))
 #define MAGMA_AND(a, b)   magma_and((a), (b))
 #define MAGMA_OR(a, b)    magma_or((a), (b))
 

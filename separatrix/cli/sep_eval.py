@@ -39,15 +39,28 @@ N_BOOT = 2000                          # bootstrap resamples for the AUC CI
 N_PERM = 2000                          # label permutations for the AUC null p
 
 
-def run(binary, data, inpath, tpath):
-    """File-mode run: returns (trace node-id list, stdout digest string)."""
+def run(binary, data, inpath, tpath, gpath=None):
+    """File-mode run: returns (trace node-id list, stdout digest, triggers set).
+
+    `triggers` is the set of 'file:line' strings the canary reported via
+    $MAGMA_TRIGGERS (empty when gpath is None). run() owns the trigger file's
+    reset-before / read-after lifecycle so the Task-2 probe and the campaign
+    cannot drift on how the fail signal is collected."""
     with open(inpath, "wb") as f:
         f.write(data)
-    p = subprocess.run([binary, inpath], env=dict(os.environ, SEP_TRACE=tpath),
+    env = dict(os.environ, SEP_TRACE=tpath)
+    if gpath:
+        env["MAGMA_TRIGGERS"] = gpath
+        open(gpath, "w").close()                         # reset before run
+    p = subprocess.run([binary, inpath], env=env,
                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     with open(tpath) as f:
         trace = [int(x) for x in f.read().split()]
-    return trace, p.stdout.decode("latin-1", "replace")
+    trig = set()
+    if gpath and os.path.exists(gpath):
+        with open(gpath) as f:
+            trig = {ln.strip() for ln in f if ln.strip()}
+    return trace, p.stdout.decode("latin-1", "replace"), trig
 
 
 def load_corpus(corpus_dir):
@@ -68,7 +81,7 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None):
     inpath = os.path.join(tmpdir, "in")
     tpath = os.path.join(tmpdir, "t")
 
-    base_trace, base_out = run(binary, seed, inpath, tpath)
+    base_trace, base_out, _ = run(binary, seed, inpath, tpath)
     base_c = metric.compress(base_trace, bucket=True)
     base_edges = metric.edge_multiset(base_trace)
 
@@ -81,7 +94,7 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None):
         perts = perturb.generate(seed, max_pert, alphabet=PRINTABLE)
     diverged = 0
     for _, buf in perts:
-        trace, out = run(binary, buf, inpath, tpath)
+        trace, out, _ = run(binary, buf, inpath, tpath)
         visits.update(trace)
         d = round(metric.jaccard(base_trace, trace) * 1000)
         v = em.value_distance(base_out, out)
