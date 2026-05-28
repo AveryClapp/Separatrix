@@ -18,8 +18,12 @@ def _is_digit(b):
     return 0x30 <= b <= 0x39
 
 
-def generate(seed: bytes, max_perturbations: int = 4000):
-    """Deterministic minimal perturbations of `seed` (same length)."""
+def generate(seed: bytes, max_perturbations: int = 4000, alphabet: bytes = _ALPHABET):
+    """Deterministic minimal perturbations of `seed` (same length).
+
+    `alphabet` is the replacement byte set for inc/dec admission and structural
+    swaps; defaults to the tinyexpr-oriented set so Phase 1-3 maps are unchanged.
+    Pass a broader set (e.g. printable ASCII) for text targets like lua."""
     out = []
     seen = {seed}
 
@@ -35,7 +39,7 @@ def generate(seed: bytes, max_perturbations: int = 4000):
         # +-1 and low-bit flip on the raw byte.
         for delta, tag in ((1, "inc"), (-1, "dec")):
             nb = (b + delta) & 0xFF
-            if nb in _ALPHABET:
+            if nb in alphabet:
                 add(f"byte{i}:{tag}", seed[:i] + bytes([nb]) + seed[i + 1:])
         # digit-specific: +-1 within 0..9, and boundary values.
         if _is_digit(b):
@@ -46,7 +50,7 @@ def generate(seed: bytes, max_perturbations: int = 4000):
                 if bound[0] != b:
                     add(f"bound{i}", seed[:i] + bound + seed[i + 1:])
         # structural swaps from the alphabet (a few, deterministic).
-        for nb in _ALPHABET:
+        for nb in alphabet:
             if nb != b:
                 add(f"alpha{i}", seed[:i] + bytes([nb]) + seed[i + 1:])
                 break  # one structural swap per position keeps the set bounded
