@@ -46,3 +46,7 @@ build/
 *.ll
 *.bc
 *.sepgraph.json
+
+# Python
+__pycache__/
+*.pyc
