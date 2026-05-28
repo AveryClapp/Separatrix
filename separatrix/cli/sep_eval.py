@@ -31,6 +31,7 @@ import perturb         # noqa: E402
 import eval_metrics as em       # noqa: E402
 import predictors as pr         # noqa: E402
 import ground_truth as gt       # noqa: E402
+import sbfl                      # noqa: E402
 
 PRINTABLE = bytes(range(0x20, 0x7F))   # broad alphabet for text targets
 PCTS = (1, 5, 10, 20)
@@ -75,19 +76,49 @@ def load_corpus(corpus_dir):
     return perts
 
 
-def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None):
+def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="trigger"):
     """Run the shared campaign; collect per-perturbation observations, coverage
-    counts, and the executed-node universe."""
+    counts, the executed-node universe, and the SBFL pass/fail spectrum.
+
+    fail_oracle: "trigger" — a run fails iff its canary reported >=1 trigger
+    (Task-2 decided this viable on lua: F=118/251). The differential buggy-vs-
+    fixed oracle (Task 3) was skipped because the trigger oracle is non-degenerate
+    here, so "trigger" is the only supported value."""
+    if fail_oracle != "trigger":
+        raise ValueError(f"unsupported fail-oracle {fail_oracle!r} (only 'trigger' "
+                         "is built; differential was skipped — see plan Task 3)")
     inpath = os.path.join(tmpdir, "in")
     tpath = os.path.join(tmpdir, "t")
+    gpath = os.path.join(tmpdir, "g")   # canary trigger file (file:line per fired site)
 
-    base_trace, base_out, _ = run(binary, seed, inpath, tpath)
+    base_trace, base_out, base_trig = run(binary, seed, inpath, tpath, gpath=gpath)
     base_c = metric.compress(base_trace, bucket=True)
     base_edges = metric.edge_multiset(base_trace)
 
     visits = collections.Counter(base_trace)
     edge_div = collections.Counter()   # per-node control-flow divergence mass
     val_div = collections.Counter()    # per-node value-distance mass (localized attribution)
+    # SBFL spectrum: ef/ep = #failing/#passing runs that executed each node.
+    ef = collections.Counter()
+    ep = collections.Counter()
+    F = 0
+    P = 0
+
+    def account(trace, trig):
+        """Fold one run (any run — baseline, diverging, or not) into the SBFL
+        spectrum. A run fails iff it triggered >=1 canary."""
+        nonlocal F, P
+        nodes_run = set(trace)
+        if trig:
+            F += 1
+            for nd in nodes_run:
+                ef[nd] += 1
+        else:
+            P += 1
+            for nd in nodes_run:
+                ep[nd] += 1
+
+    account(base_trace, base_trig)
     obs = []
     if corpus_dir:
         perts = load_corpus(corpus_dir)
@@ -95,8 +126,9 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None):
         perts = perturb.generate(seed, max_pert, alphabet=PRINTABLE)
     diverged = 0
     for _, buf in perts:
-        trace, out, _ = run(binary, buf, inpath, tpath)
+        trace, out, trig = run(binary, buf, inpath, tpath, gpath=gpath)
         visits.update(trace)
+        account(trace, trig)            # SBFL counts every run, before the divergence filter
         d = round(metric.jaccard(base_trace, trace) * 1000)
         v = em.value_distance(base_out, out)
         if d == 0 and v == 0.0:
@@ -121,6 +153,7 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None):
     universe = sorted(visits)
     return {"obs": obs, "visits": dict(visits), "edge_div": dict(edge_div),
             "val_div": dict(val_div),
+            "ef": dict(ef), "ep": dict(ep), "F": F, "P": P, "fail_oracle": fail_oracle,
             "universe": universe, "perts": len(perts), "diverged": diverged,
             "base_len": len(base_trace), "base_out": base_out}
 
@@ -162,6 +195,10 @@ def main():
                          "set (instead of byte-mutating the seed); for structured "
                          "inputs like a programming language.")
     ap.add_argument("--window", type=int, default=3)
+    ap.add_argument("--fail-oracle", choices=["trigger"], default="trigger",
+                    help="SBFL pass/fail signal. 'trigger': a run fails iff its "
+                         "canary fired (Task-2 viable on lua). Differential "
+                         "(buggy-vs-fixed) was skipped — see plan Task 3.")
     ap.add_argument("-o", "--out", default=None)
     args = ap.parse_args()
 
@@ -176,7 +213,8 @@ def main():
         ap.error("need --seed-file or --seed")
 
     tmpdir = tempfile.mkdtemp(prefix="sep_eval_")
-    camp = campaign(args.bin, seed, args.max_pert, tmpdir, corpus_dir=args.corpus)
+    camp = campaign(args.bin, seed, args.max_pert, tmpdir, corpus_dir=args.corpus,
+                    fail_oracle=args.fail_oracle)
     universe = camp["universe"]
 
     # ground-truth labels at both granularities, plus reachability report
@@ -196,6 +234,10 @@ def main():
         "value_localized": pr.coverage(camp["val_div"], universe), # value through the SAME localization (fair vs divergence)
         "value_firstbif": pr.value(camp["obs"], universe),         # old first-bifurcation value attribution (kept for the record)
         "coverage": pr.coverage(camp["visits"], universe),
+        # spectrum-based fault localization baselines (the missing comparison)
+        "sbfl_ochiai":    sbfl.score_all(camp["ef"], camp["ep"], camp["F"], camp["P"], universe, "ochiai"),
+        "sbfl_tarantula": sbfl.score_all(camp["ef"], camp["ep"], camp["F"], camp["P"], universe, "tarantula"),
+        "sbfl_dstar":     sbfl.score_all(camp["ef"], camp["ep"], camp["F"], camp["P"], universe, "dstar"),
     }
     # random: average AUC/AP/p@k over N_RANDOM independent rankings
     rnd_runs = [pr.random_scores(universe, random.Random(s)) for s in range(N_RANDOM)]
@@ -221,19 +263,26 @@ def main():
     out = {
         "binary": os.path.basename(args.bin),
         "campaign": {"perturbations": camp["perts"], "diverged": camp["diverged"],
-                     "universe_nodes": len(universe), "baseline_trace_len": camp["base_len"]},
+                     "universe_nodes": len(universe), "baseline_trace_len": camp["base_len"],
+                     "fail_oracle": camp["fail_oracle"], "F": camp["F"], "P": camp["P"]},
         "bugs": len(bugs), "reachability": reach,
         "results": results,
         "case_study_top_region": case_study,
         "note_baselines_deferred": "Mull (mutation score) baseline not run: separate "
                                    "toolchain, not installed; framework leaves a predictor slot.",
     }
+    if camp["F"] == 0:
+        out["note_sbfl_degenerate"] = (f"SBFL degenerate: no failing runs under the "
+                                       f"{camp['fail_oracle']} oracle (F=0); its AUCs are "
+                                       f"undefined (reported as 0.5), not a real baseline.")
     out_path = args.out or (os.path.splitext(args.graph)[0] + ".eval.json")
     json.dump(out, open(out_path, "w"), indent=2)
 
     # console report
     print(f"campaign: {camp['perts']} perturbations, {camp['diverged']} diverged, "
           f"{len(universe)} executed nodes, baseline trace {camp['base_len']}")
+    print(f"fail-oracle ({camp['fail_oracle']}): F={camp['F']} failing / P={camp['P']} passing runs"
+          + ("   [WARN] F=0 -> SBFL degenerate" if camp["F"] == 0 else ""))
     print("bug-region reachability:")
     for r in reach:
         print(f"  {r['bug_id']:<8} {r['function']:<18} "
@@ -242,15 +291,16 @@ def main():
     for lvl in ("region", "node"):
         res = results[lvl]
         print(f"\n== {lvl}-level ranking ({res['positives']} positive nodes) ==")
-        print(f"  {'predictor':<12}{'AUC':>8}{'95%CI':>16}{'perm_p':>9}{'AP':>8}"
+        print(f"  {'predictor':<16}{'AUC':>8}{'95%CI':>16}{'perm_p':>9}{'AP':>8}"
               f"{'p@1':>7}{'p@5':>7}{'p@10':>7}{'p@20':>7}")
-        for name in ("trajectory", "divergence", "value_localized", "value_firstbif", "coverage", "random"):
+        for name in ("trajectory", "divergence", "value_localized", "value_firstbif",
+                     "coverage", "sbfl_ochiai", "sbfl_tarantula", "sbfl_dstar", "random"):
             m = res["predictors"][name]
             pa = m["precision_at"]
             ci = m.get("auc_ci")
             ci_s = f"[{ci[0]:.3f},{ci[1]:.3f}]" if ci else "--"
             p_s = f"{m['auc_p']:.4f}" if m.get("auc_p") is not None else "--"
-            print(f"  {name:<12}{m['auc']:>8}{ci_s:>16}{p_s:>9}{m['ap']:>8}"
+            print(f"  {name:<16}{m['auc']:>8}{ci_s:>16}{p_s:>9}{m['ap']:>8}"
                   f"{pa['p1']:>7}{pa['p5']:>7}{pa['p10']:>7}{pa['p20']:>7}")
     print(f"\nmap: {out_path}")
 
