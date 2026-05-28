@@ -123,6 +123,24 @@ def jaccard(t0, t1):
     return 0.0 if union == 0 else 1.0 - inter / union
 
 
+def localized_divergence(base_edges, pert_edges):
+    """Per-node trajectory divergence for one perturbation (divergence
+    localization). Given two bucketed edge multisets, credit each edge's SOURCE
+    node with the absolute bucketed-count delta of every edge that differs.
+
+    Unlike first-bifurcation attribution (which credits only the single node
+    where trajectories first diverge), this credits EVERY node whose outgoing-
+    edge profile moved — the per-node form of the trajectory-divergence metric.
+    On staged targets (lex->parse->compile->exec) first-bifurcation only ever
+    credits the front-end; localization reaches downstream regions (Phase 4)."""
+    out = {}
+    for e in set(base_edges) | set(pert_edges):
+        delta = abs(base_edges.get(e, 0) - pert_edges.get(e, 0))
+        if delta:
+            out[e[0]] = out.get(e[0], 0) + delta
+    return out
+
+
 def bifurcation_tok(a, b):
     """First differing token between two compressed sequences (None if equal)."""
     m = min(len(a), len(b))

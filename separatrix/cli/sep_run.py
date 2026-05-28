@@ -2,8 +2,9 @@
 """separatrix run — Phase-2 sensitivity-map campaign.
 
 Runs a structurally-unguided perturbation campaign against an instrumented
-target, scores each behavioral-graph node by trajectory divergence, and emits a
-ranked sensitivity map.
+target, scores each behavioral-graph node by *localised* trajectory divergence
+(every node where the trajectory diverges, not just the first-bifurcation
+point), and emits a ranked sensitivity map.
 
   sep_run.py --bin <inst_binary> --graph <graph.json> --seed "<input>" \
              [-o map.json] [--max-pert N]
@@ -60,27 +61,31 @@ def main():
 
     base = run_trace(args.bin, seed, tpath)
     cbase = metric.compress(base, bucket=True)
+    base_edges = metric.edge_multiset(base)
 
     perts = perturb.generate(seed, args.max_pert)
 
-    per_node = {}          # node_id -> list of D
+    per_node = {}          # node_id -> list of per-perturbation localised divergence mass
     exact_v, banded_v, jaccard_v = [], [], []
     t_start = time.time()
     diverged = 0
     for label, buf in perts:
         trace = run_trace(args.bin, buf, tpath)
-        cp = metric.compress(trace, bucket=True)
-        tok = metric.bifurcation_tok(cbase, cp)   # attribution (cheap) either way
         if args.metric == "jaccard":
             d = round(metric.jaccard(base, trace) * 1000)   # O(n) scale scoring
         else:
+            cp = metric.compress(trace, bucket=True)
             d = metric.lev(cbase, cp)
         if d == 0:
             continue
         diverged += 1
-        nid = metric.first_id(tok) if tok is not None else None
-        if nid is not None and nid in node:
-            per_node.setdefault(nid, []).append(d)
+        # Divergence localization: credit EVERY source-mapped node where the
+        # trajectory diverges from baseline, not just the first-bifurcation node.
+        # First-bifurcation only ever credits the front-end on staged targets and
+        # scores ~random there (Phase-4 finding); localization reaches downstream.
+        for nid, mass in metric.localized_divergence(base_edges, metric.edge_multiset(trace)).items():
+            if nid in node and node[nid]["file"] and node[nid]["line"] > 0:
+                per_node.setdefault(nid, []).append(mass)
         if args.metric == "exact":
             exact_v.append(d)
             banded_v.append(metric.lev_banded(cbase, cp))   # fast approx, short traces
@@ -115,7 +120,7 @@ def main():
                               "on long traces (see exact-mode runs)"}
     out = {
         "binary": os.path.basename(args.bin), "seed": args.seed,
-        "metric": f"trajectory-divergence/{args.metric}",
+        "metric": f"trajectory-divergence-localized/{args.metric}",
         "perturbations": len(perts), "diverged": diverged,
         "baseline_trace_len": len(base), "baseline_compressed_len": len(cbase),
         "validation": validation,
