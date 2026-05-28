@@ -53,3 +53,56 @@ def generate(seed: bytes, max_perturbations: int = 4000):
 
     # Deterministic order already (position-major); cap for tractability.
     return out[:max_perturbations]
+
+
+def _variants_at(seed, i):
+    """All distinct minimal single-byte perturbations at position i."""
+    b = seed[i]
+    cands = set(_ALPHABET) | {(b + 1) & 0xFF, (b - 1) & 0xFF, b ^ 1}
+    out = []
+    for nb in sorted(cands):
+        if nb != b and 0x20 <= nb < 0x7F:
+            out.append(seed[:i] + bytes([nb]) + seed[i + 1:])
+    return out
+
+
+def generate_at(seed: bytes, positions, cap: int):
+    """Distinct minimal perturbations concentrated at the given input positions,
+    in the order positions are listed (highest-priority first), up to `cap`."""
+    out, seen = [], {seed}
+    for i in positions:
+        if not (0 <= i < len(seed)):
+            continue
+        for buf in _variants_at(seed, i):
+            if buf not in seen:
+                seen.add(buf)
+                out.append((f"at{i}", buf))
+                if len(out) >= cap:
+                    return out
+    return out
+
+
+def probe_once(seed: bytes):
+    """Exactly one deterministic perturbation per input position (cost = len),
+    so a guided strategy can map every position to the code region it reaches."""
+    out = []
+    for i in range(len(seed)):
+        variants = _variants_at(seed, i)
+        if variants:
+            out.append((i, variants[0]))
+    return out
+
+
+def sample_random(seed: bytes, n: int, rng):
+    """n random same-length single-byte perturbations (the naive baseline).
+    Draws may repeat — that is realistic for unguided random perturbation."""
+    out = []
+    if not seed:
+        return out
+    for _ in range(n):
+        i = rng.randrange(len(seed))
+        nb = rng.choice(_ALPHABET)
+        while nb == seed[i]:
+            nb = rng.choice(_ALPHABET)
+        out.append((f"rand{i}", seed[:i] + bytes([nb]) + seed[i + 1:]))
+    return out
