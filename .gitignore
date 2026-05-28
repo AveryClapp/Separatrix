@@ -50,3 +50,7 @@ build/
 # Python
 __pycache__/
 *.pyc
+
+# Local-only working dirs (intentionally untracked)
+docs/
+spike/
