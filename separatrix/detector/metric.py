@@ -102,6 +102,27 @@ def lev_banded(a, b, band=BAND):
     return prev[lb] if prev[lb] < INF else abs(la - lb) + band
 
 
+def edge_multiset(seq):
+    """Bucketed edge multiset: consecutive node pairs -> log-bucketed count.
+    O(n), alignment-free — the scale fallback for long traces where banded
+    Levenshtein loses fidelity (large divergence exceeds any fixed band)."""
+    counts = {}
+    for i in range(len(seq) - 1):
+        e = (seq[i], seq[i + 1])
+        counts[e] = counts.get(e, 0) + 1
+    return {e: classify(c) for e, c in counts.items()}
+
+
+def jaccard(t0, t1):
+    """Weighted Jaccard distance over bucketed edge multisets, in [0,1].
+    Different scale from Levenshtein but rank-correlates with it; O(n)."""
+    m0, m1 = edge_multiset(t0), edge_multiset(t1)
+    keys = set(m0) | set(m1)
+    inter = sum(min(m0.get(k, 0), m1.get(k, 0)) for k in keys)
+    union = sum(max(m0.get(k, 0), m1.get(k, 0)) for k in keys)
+    return 0.0 if union == 0 else 1.0 - inter / union
+
+
 def bifurcation_tok(a, b):
     """First differing token between two compressed sequences (None if equal)."""
     m = min(len(a), len(b))

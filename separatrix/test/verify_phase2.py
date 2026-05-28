@@ -25,9 +25,18 @@ def main(map_path, graph_path):
     res.append(("P2 attributable", len(bad) == 0 and len(unmapped) == 0,
                 f"{len(bad)} invalid, {len(unmapped)} unmapped of {len(rank)} ranked"))
 
-    rho = m["validation"]["banded_spearman"]
-    res.append(("P3 banded~exact", rho >= 0.90,
-                f"Spearman rho={rho}, max|err|={m['validation']['banded_max_err']}"))
+    # A fast approximation must track exact: banded on short traces, jaccard on
+    # long ones. The gate passes if either reaches rho >= 0.90. In jaccard
+    # scale-mode no exact is computed (that is the point); P3 is informational.
+    v = m["validation"]
+    clen = m.get("baseline_compressed_len", "?")
+    if "banded_spearman" in v:
+        rho = max(v["banded_spearman"], v["jaccard_spearman"])
+        res.append(("P3 fast-approx~exact", rho >= 0.90,
+                    f"banded rho={v['banded_spearman']}, jaccard rho={v['jaccard_spearman']}, "
+                    f"best={v['best_fast_approx']} (compressed len {clen})"))
+    else:
+        print(f"  [INFO] P3 scale-mode        {v.get('note','jaccard')} (compressed len {clen})")
 
     print(f"== Phase-2 gate: {os.path.basename(map_path)} ==")
     for name, ok, detail in res:

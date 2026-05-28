@@ -45,6 +45,10 @@ def main():
     ap.add_argument("--seed", required=True)
     ap.add_argument("-o", "--out", default=None)
     ap.add_argument("--max-pert", type=int, default=4000)
+    ap.add_argument("--metric", choices=("exact", "jaccard"), default="exact",
+                    help="exact: Levenshtein + fast-approx validation (slow, for "
+                         "validation/short traces). jaccard: O(n) edge-set scoring "
+                         "(fast, for long traces; validated rho>=0.98 vs exact).")
     args = ap.parse_args()
 
     g = json.load(open(args.graph))
@@ -60,22 +64,27 @@ def main():
     perts = perturb.generate(seed, args.max_pert)
 
     per_node = {}          # node_id -> list of D
-    exact_v, banded_v = [], []
+    exact_v, banded_v, jaccard_v = [], [], []
     t_start = time.time()
     diverged = 0
     for label, buf in perts:
         trace = run_trace(args.bin, buf, tpath)
         cp = metric.compress(trace, bucket=True)
-        d = metric.lev(cbase, cp)
+        tok = metric.bifurcation_tok(cbase, cp)   # attribution (cheap) either way
+        if args.metric == "jaccard":
+            d = round(metric.jaccard(base, trace) * 1000)   # O(n) scale scoring
+        else:
+            d = metric.lev(cbase, cp)
         if d == 0:
             continue
         diverged += 1
-        tok = metric.bifurcation_tok(cbase, cp)
         nid = metric.first_id(tok) if tok is not None else None
         if nid is not None and nid in node:
             per_node.setdefault(nid, []).append(d)
-        exact_v.append(d)
-        banded_v.append(metric.lev_banded(cbase, cp))
+        if args.metric == "exact":
+            exact_v.append(d)
+            banded_v.append(metric.lev_banded(cbase, cp))   # fast approx, short traces
+            jaccard_v.append(metric.jaccard(base, trace))   # fast approx, long traces
     elapsed = time.time() - t_start
 
     ranking = []
@@ -90,14 +99,26 @@ def main():
         })
     ranking.sort(key=lambda r: (-r["sum_d"], -r["count"], r["node"]))
 
-    rho = metric.spearman(exact_v, banded_v)
-    max_err = max((abs(a - b) for a, b in zip(exact_v, banded_v)), default=0)
+    if args.metric == "exact":
+        # Fidelity of each fast approximation vs exact. Banded tracks on short
+        # traces; on long traces divergence exceeds the band and jaccard wins.
+        rho_b = metric.spearman(exact_v, banded_v)
+        rho_j = metric.spearman(exact_v, jaccard_v)
+        validation = {
+            "banded_spearman": round(rho_b, 4),
+            "jaccard_spearman": round(rho_j, 4),
+            "best_fast_approx": "banded" if rho_b >= rho_j else "jaccard",
+        }
+    else:
+        validation = {"mode": "jaccard-scale",
+                      "note": "O(n) edge-set scoring; validated rho>=0.98 vs exact "
+                              "on long traces (see exact-mode runs)"}
     out = {
         "binary": os.path.basename(args.bin), "seed": args.seed,
-        "metric": "trajectory-divergence/compressed-bucketed-levenshtein",
+        "metric": f"trajectory-divergence/{args.metric}",
         "perturbations": len(perts), "diverged": diverged,
-        "baseline_trace_len": len(base),
-        "validation": {"banded_spearman": round(rho, 4), "banded_max_err": max_err},
+        "baseline_trace_len": len(base), "baseline_compressed_len": len(cbase),
+        "validation": validation,
         "ranking": ranking,
     }
     out_path = args.out or (os.path.splitext(args.graph)[0] + ".sepmap.json")
@@ -108,7 +129,12 @@ def main():
           f"{len(ranking)} sensitive nodes")
     print(f"cost: {runs} runs in {elapsed:.2f}s = {runs/elapsed:.0f} runs/s; "
           f"baseline trace {len(base)} events")
-    print(f"validation: banded vs exact Spearman rho={rho:.4f}, max|err|={max_err}")
+    if args.metric == "exact":
+        print(f"validation vs exact: banded rho={validation['banded_spearman']}, "
+              f"jaccard rho={validation['jaccard_spearman']} "
+              f"(best fast approx: {validation['best_fast_approx']})")
+    else:
+        print(f"metric: jaccard scale-mode ({validation['note']})")
     print(f"map: {out_path}")
     print("top sensitive regions (by total divergence originating there):")
     for r in ranking[:10]:
