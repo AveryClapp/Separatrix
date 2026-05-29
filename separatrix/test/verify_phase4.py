@@ -45,6 +45,27 @@ def main(path):
     val_loc = P["value_localized"]["auc"]   # value through the SAME localization (fair vs divergence)
     val_fb = P["value_firstbif"]["auc"]     # old first-bifurcation value attribution
 
+    # Paired-difference bootstrap CIs (Bonferroni-widened to alpha/m): divergence
+    # is scored over the SAME node universe as each baseline, so this paired test
+    # is the rigorous AUC-difference comparison. "excludes 0" carries the
+    # multiple-comparison correction directly (no separate p-value).
+    pd = e.get("paired_diffs", {})
+
+    def pd_line(other_key, label):
+        # other_key=None -> the per-level best-SBFL key (which can differ between
+        # region and node), read from the block so neither line is dropped.
+        for lvl in ("region", "node"):
+            block = pd.get(lvl, {})
+            key = other_key or block.get("best_sbfl")
+            triple = block.get(f"divergence_minus_{key}") if key else None
+            if not triple:
+                continue
+            lab = label or f"best SBFL {key}"
+            obs, lo, hi = triple
+            sig = "excludes 0" if lo > 0 else "includes 0"
+            print(f"  [INFO] div - {lab} ({lvl}): {obs:+.3f} CI[{lo:.3f},{hi:.3f}] "
+                  f"(alpha={block['alpha']:.4f}, m={block['family_size']}) ({sig})")
+
     reached = sum(1 for r in e["reachability"] if r["reached"])
     print(f"== Phase-4 gate: {path.split('/')[-1]} ==")
     print(f"  campaign: {e['campaign']['perturbations']} perturbations, "
@@ -57,6 +78,7 @@ def main(path):
           f"region AUC divergence={traj_sens} vs random={rnd}")
     print(f"  [{'PASS' if g2 else 'FAIL'}] G2 sensitivity>coverage  "
           f"region AUC divergence={traj_sens} vs coverage={cov}")
+    pd_line("coverage", "coverage")
 
     # G3: divergence vs the best SBFL formula. Only meaningful when SBFL is
     # available (a valid oracle produced failing runs); otherwise N/A — never an
@@ -73,6 +95,7 @@ def main(path):
             print(f"  [INFO] {name:<14} region AUC={sbfl_aucs[name]}{ci_s}")
         print(f"  [{'PASS' if g3 else 'FAIL'}] G3 sensitivity>SBFL      "
               f"region AUC divergence={traj_sens} vs best SBFL {best}={sbfl_aucs[best]}")
+        pd_line(None, None)
     else:
         print(f"  [N/A ] G3 sensitivity>SBFL      {sbfl.get('reason', '')}")
 
@@ -80,6 +103,7 @@ def main(path):
           f"-> {'adequate' if first_bif > cov else 'INADEQUATE on staged target (localises to lexer)'}")
     print(f"  [INFO] value-localized baseline AUC={val_loc} "
           f"-> {'trajectory divergence > value (same localization)' if traj_sens > val_loc else 'value >= trajectory (reshapes framing)'}")
+    pd_line("value_localized", "value_localized")
     print(f"  [INFO] value-firstbif baseline AUC={val_fb} (old attribution, for the record)")
 
     # Headline gate = G1 & G2 (& G3 when SBFL is available). A N/A G3 neither

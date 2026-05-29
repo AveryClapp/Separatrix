@@ -311,6 +311,33 @@ def main():
         }
         results[lvl] = {"positives": sum(lab), "predictors": per_pred}
 
+    # Paired-difference bootstrap CIs for the headline comparisons. The
+    # predictors are scored over the SAME node universe (correlated), so a paired
+    # resample of node indices is the right test for an AUC difference, not
+    # marginal-CI overlap. Each CI is Bonferroni-widened to alpha/m, where m is the
+    # per-granularity headline family size (Decision #4): divergence vs
+    # {coverage, value_localized, best-SBFL} (m=3 with SBFL, m=2 when N/A). A
+    # difference is significant iff its alpha/m CI excludes 0.
+    paired_diffs = {}
+    for lvl in ("node", "region"):
+        lab = labels[lvl]
+        others = ["coverage", "value_localized"]
+        best_sbfl = None
+        if sbfl_available:
+            sbfl_aucs = {f: results[lvl]["predictors"][f]["auc"]
+                         for f in ("sbfl_ochiai", "sbfl_tarantula", "sbfl_dstar")}
+            best_sbfl = max(sbfl_aucs, key=sbfl_aucs.get)
+            others.append(best_sbfl)
+        m = len(others)
+        alpha = 0.05 / m
+        div_vec = [scores["divergence"][n] for n in universe]
+        block = {"family_size": m, "alpha": alpha, "best_sbfl": best_sbfl}
+        for other in others:
+            ovec = [scores[other][n] for n in universe]
+            block[f"divergence_minus_{other}"] = list(
+                em.paired_bootstrap_auc_diff(div_vec, ovec, lab, n_boot=N_BOOT, seed=0, alpha=alpha))
+        paired_diffs[lvl] = block
+
     case_study = {name: top_region(sc, universe, gnodes) for name, sc in scores.items()}
 
     out = {
@@ -323,6 +350,7 @@ def main():
                  "predictors": ["sbfl_ochiai", "sbfl_tarantula", "sbfl_dstar"] if sbfl_available else [],
                  "reason": None if sbfl_available else SBFL_NA_REASON},
         "results": results,
+        "paired_diffs": paired_diffs,
         "case_study_top_region": case_study,
         "note_baselines_deferred": "Mull (mutation score) baseline not run: separate "
                                    "toolchain, not installed; framework leaves a predictor slot.",
