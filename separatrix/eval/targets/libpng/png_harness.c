@@ -22,9 +22,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <signal.h>
 #include "png.h"
 
 #define PNG_HEADER_SIZE 8
+#define DECODE_TIMEOUT_SECS 3      /* hard per-run wall cap (DoS / decompression bombs) */
+#define MAX_DECODE_PIXELS  4000000 /* bail on dimension-driven DoS before the row loop */
 #define FNV64_OFFSET 14695981039346656037ULL
 #define FNV64_PRIME  1099511628211ULL
 
@@ -57,6 +61,21 @@ static void fnv64(const unsigned char *p, size_t n) {
     }
 }
 
+/* A perturbed input can drive a libpng decode into a multi-million-row loop or a
+ * zlib decompression bomb that runs for minutes (especially under ASAN). Bound
+ * every run with a hard wall-clock alarm: emit a deterministic timeout digest via
+ * an async-signal-safe write and exit. Because BOTH the buggy and fixed binaries
+ * time out identically on a benign DoS input, the digests stay equal and the
+ * differential oracle does not miscount it; only a bug that makes one binary hang
+ * while the other completes is a real failure. */
+static void on_timeout(int sig) {
+    (void)sig;
+    const char msg[] = "S-9 timeout\n";
+    ssize_t w = write(1, msg, sizeof(msg) - 1);
+    (void)w;
+    _exit(0);
+}
+
 static unsigned char *read_file(const char *path, size_t *out_n) {
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
@@ -80,6 +99,8 @@ static void emit(int status, png_uint_32 w, png_uint_32 h) {
 
 int main(int argc, char **argv) {
     if (argc < 2) { fprintf(stderr, "usage: %s <png-file>\n", argv[0]); return 2; }
+    signal(SIGALRM, on_timeout);
+    alarm(DECODE_TIMEOUT_SECS);
     size_t n = 0;
     unsigned char *data = read_file(argv[1], &n);
     if (!data) { emit(-1, 0, 0); return 0; }                 /* read error */
@@ -127,7 +148,7 @@ int main(int argc, char **argv) {
         png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
         emit(2, 0, 0); free(data); return 0;                 /* no IHDR */
     }
-    if (width && height > 100000000u / width) {              /* too slow / huge */
+    if (width && height > MAX_DECODE_PIXELS / width) {        /* dimension-driven DoS */
         png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
         emit(3, width, height); free(data); return 0;
     }

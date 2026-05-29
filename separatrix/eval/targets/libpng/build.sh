@@ -74,11 +74,19 @@ done
 INCS="-I $REPO -I $ZLIB_PREFIX/include -DPNG_ARM_NEON_OPT=0"
 LIBS="-L $ZLIB_PREFIX/lib -lz -lm"
 
+# ASAN=1: build with AddressSanitizer so a triggered memory-safety bug aborts
+# observably (Magma's methodology) — the differential oracle then sees the bug as
+# a stdout difference (buggy aborts with no final digest vs fixed's clean digest),
+# which the no-sanitizer build cannot (those bugs corrupt memory silently). -O1 is
+# ASAN's recommended floor.
+SAN=""; OPT="-O0"
+if [ "${ASAN:-0}" = "1" ]; then SAN="-fsanitize=address"; OPT="-O1"; fi
+
 build_one() {  # <out> <bug-mode-define> <extra-srcs...>
   local out="$1"; local mode="$2"; shift 2
   # -include math.h: libpng's pngpriv.h takes a legacy <fp.h> path under
   # TARGET_OS_MAC unless <math.h> (guard __MATH_H__) is already included.
-  $CLANG -g -O0 $INCS -include math.h -include "$LUATGT/magma_canary.h" "$mode" \
+  $CLANG -g $OPT $SAN $INCS -include math.h -include "$LUATGT/magma_canary.h" "$mode" \
     "${LIBSRC[@]}" "$HERE/png_harness.c" "$@" $LIBS -o "$out"
 }
 
