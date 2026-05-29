@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Extract ground-truth bug sites from applied Magma bug patches.
 
-For each LUA*.patch, find the added `MAGMA_LOG(...)` canary line and the file it
-lands in, then locate that exact line in the *patched* source tree to get its
+For each matching patch, find the added `MAGMA_LOG(...)` canary line and the file
+it lands in, then locate that exact line in the *patched* source tree to get its
 final line number. Emits bugs.json: [{bug_id, file, line, condition}].
 
-  extract_bugs.py <patches/bugs dir> <patched repo dir> -o bugs.json
+  extract_bugs.py <patches/bugs dir> <patched repo dir> -o bugs.json [--glob 'PNG*.patch']
+
+--glob selects which patches to read (default 'LUA*.patch'); the canary format is
+identical across Magma targets, so the same extractor serves every per-target port.
 """
 import argparse, glob, json, os, re
 
@@ -45,10 +48,12 @@ def main():
     ap.add_argument("patchdir")
     ap.add_argument("repo")
     ap.add_argument("-o", "--out", required=True)
+    ap.add_argument("--glob", default="LUA*.patch",
+                    help="patch filename glob (default LUA*.patch; e.g. 'PNG*.patch')")
     args = ap.parse_args()
 
     bugs = []
-    for patch in sorted(glob.glob(os.path.join(args.patchdir, "LUA*.patch"))):
+    for patch in sorted(glob.glob(os.path.join(args.patchdir, args.glob))):
         bug_id = os.path.splitext(os.path.basename(patch))[0]
         rel_file, canary = canary_from_patch(patch)
         if not canary:
