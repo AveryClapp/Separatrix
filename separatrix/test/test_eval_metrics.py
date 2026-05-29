@@ -149,6 +149,38 @@ def test_permutation_deterministic():
             == em.permutation_test_auc(*args, n_perm=300, seed=3))
 
 
+# ---- paired-difference bootstrap on AUC(a) - AUC(b) over the same nodes ----
+
+def test_paired_diff_observed_equals_marginal_difference():
+    # observed diff must equal roc_auc(a) - roc_auc(b) exactly (the point estimate)
+    a = [0.9, 0.1, 0.8, 0.2]; b = [0.4, 0.6, 0.3, 0.7]; y = [1, 0, 1, 0]
+    obs, lo, hi = em.paired_bootstrap_auc_diff(a, b, y, n_boot=200, seed=0)
+    assert abs(obs - (em.roc_auc(a, y) - em.roc_auc(b, y))) < 1e-12
+
+
+def test_paired_diff_identical_predictors_is_zero_with_ci_containing_zero():
+    a = [0.9, 0.1, 0.8, 0.2]; y = [1, 0, 1, 0]
+    obs, lo, hi = em.paired_bootstrap_auc_diff(a, a, y, n_boot=500, seed=0)
+    assert obs == 0.0 and lo <= 0.0 <= hi
+
+
+def test_paired_diff_dominating_predictor_has_positive_observed_and_lo():
+    # a ranks both positives above both negatives (AUC 1.0); b is reversed (AUC 0.0)
+    a = [1.0, 0.0, 0.9, 0.1]; b = [0.0, 1.0, 0.1, 0.9]; y = [1, 0, 1, 0]
+    obs, lo, hi = em.paired_bootstrap_auc_diff(a, b, y, n_boot=500, seed=0)
+    assert obs == 1.0 and lo > 0.0          # CI excludes 0 -> a beats b
+
+
+def test_paired_diff_is_seeded_reproducible():
+    a = [0.9, 0.1, 0.8, 0.2]; b = [0.4, 0.6, 0.3, 0.7]; y = [1, 0, 1, 0]
+    assert em.paired_bootstrap_auc_diff(a, b, y, 300, 0) == em.paired_bootstrap_auc_diff(a, b, y, 300, 0)
+
+
+def test_paired_diff_degenerate_class_returns_zero_interval():
+    a = [0.9, 0.8]; b = [0.1, 0.2]; y = [1, 1]   # no negatives
+    assert em.paired_bootstrap_auc_diff(a, b, y, 100, 0) == (0.0, 0.0, 0.0)
+
+
 def _run():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0

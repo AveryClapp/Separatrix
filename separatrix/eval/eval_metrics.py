@@ -97,6 +97,33 @@ def bootstrap_auc_ci(scores, labels, n_boot=2000, seed=0, alpha=0.05):
     return (round(lo, 4), round(hi, 4))
 
 
+def paired_bootstrap_auc_diff(scores_a, scores_b, labels, n_boot=2000, seed=0, alpha=0.05):
+    """Paired percentile-bootstrap CI for AUC(a) - AUC(b) over the SAME nodes.
+
+    Predictors are scored on the same node universe, so they are correlated; the
+    rigorous test resamples the shared NODE INDICES (stratified within class so no
+    resample is degenerate), recomputes BOTH AUCs on that identical resample, and
+    takes the difference. Returns (observed_diff, lo, hi) where observed_diff is
+    the full-data AUC(a)-AUC(b). Degenerate (a class empty) -> (0.0, 0.0, 0.0)."""
+    pos = [i for i, y in enumerate(labels) if y]
+    neg = [i for i, y in enumerate(labels) if not y]
+    obs = roc_auc(scores_a, labels) - roc_auc(scores_b, labels)
+    if not pos or not neg:
+        return (0.0, 0.0, 0.0)
+    rng = random.Random(seed)
+    y = [1] * len(pos) + [0] * len(neg)
+    diffs = []
+    for _ in range(n_boot):
+        idx = [rng.choice(pos) for _ in pos] + [rng.choice(neg) for _ in neg]
+        sa = [scores_a[i] for i in idx]
+        sb = [scores_b[i] for i in idx]
+        diffs.append(_auc_from_ranks(_avg_ranks(sa), y) - _auc_from_ranks(_avg_ranks(sb), y))
+    diffs.sort()
+    lo = diffs[max(0, int((alpha / 2.0) * n_boot))]
+    hi = diffs[min(n_boot - 1, int((1.0 - alpha / 2.0) * n_boot))]
+    return (round(obs, 4), round(lo, 4), round(hi, 4))
+
+
 def permutation_test_auc(scores, labels, n_perm=2000, seed=0):
     """One-sided permutation p-value for H0: score is unrelated to label.
 
