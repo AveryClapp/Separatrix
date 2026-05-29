@@ -6,9 +6,9 @@ Most testing tools ask *did we execute this code?* Separatrix asks *where does t
 
 ## How it works
 
-1. **Analyze** — a static pass builds a behavioral graph of your code: call structure, data flow, branch boundaries, implicit invariants
-2. **Perturb** — targeted mutations are generated at high-sensitivity regions, not random fuzzing
-3. **Score** — outputs a sensitivity map of your codebase, every component ranked by how much it amplifies small changes
+1. **Analyze** — a static pass builds a behavioral graph of your code: call structure, control flow, branch boundaries, source locations
+2. **Perturb** — perturbation budget is *concentrated* where it produces divergence (steered off input bytes that change nothing), rather than spent uniformly at random
+3. **Score** — outputs a sensitivity map: every node ranked by **how much perturbation makes its control flow diverge** from baseline (divergence localization), which on a Magma library predicts real bug locations better than coverage frequency
 
 ## Status
 
@@ -35,4 +35,4 @@ Coverage tells you what ran. Separatrix tells you what breaks.
 
 ---
 
-*Named after the boundary curve in dynamical systems that separates regions of qualitatively different behavior.*
+*Named for the set of points in a dynamical system from which small perturbations push trajectories apart — which is exactly what the tool scores: the nodes where a tiny input change makes execution diverge.*
