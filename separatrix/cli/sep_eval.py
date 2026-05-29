@@ -38,6 +38,14 @@ PCTS = (1, 5, 10, 20)
 N_RANDOM = 25                          # random-ranking draws to average over
 N_BOOT = 2000                          # bootstrap resamples for the AUC CI
 N_PERM = 2000                          # label permutations for the AUC null p
+SBFL_NA_REASON = (                     # why SBFL is N/A on lua (both oracles invalid)
+    "SBFL N/A: no valid fail-oracle on this target. Differential is degenerate "
+    "(F=0 — LUA004 is a debug-subsystem bug that never reaches the harness's "
+    "observable output); trigger is non-reproducible (the canary does "
+    "ASLR-sensitive cross-Proto pointer arithmetic; F jitters ~107-122/251). "
+    "The divergence-vs-SBFL gate (G3) activates on the first multi-library "
+    "target whose bug manifests in observable output (differential oracle)."
+)
 
 
 def run(binary, data, inpath, tpath, gpath=None):
@@ -64,6 +72,16 @@ def run(binary, data, inpath, tpath, gpath=None):
     return trace, p.stdout.decode("latin-1", "replace"), trig
 
 
+def run_digest(binary, data, inpath):
+    """Run a (possibly uninstrumented) binary on `data`; return its stdout digest
+    only. The differential oracle's fixed reference emits no trace, so run() —
+    which reads $SEP_TRACE — can't be used for it."""
+    with open(inpath, "wb") as f:
+        f.write(data)
+    p = subprocess.run([binary, inpath], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    return p.stdout.decode("latin-1", "replace")
+
+
 def load_corpus(corpus_dir):
     """Read a directory of input files as the perturbation set (one valid input
     per file). Used instead of byte-mutation when inputs are structured (e.g. a
@@ -76,22 +94,42 @@ def load_corpus(corpus_dir):
     return perts
 
 
-def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="trigger"):
+def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="none",
+             fixed_bin=None):
     """Run the shared campaign; collect per-perturbation observations, coverage
-    counts, the executed-node universe, and the SBFL pass/fail spectrum.
+    counts, the executed-node universe, and (when an oracle is selected) the SBFL
+    pass/fail spectrum.
 
-    fail_oracle: "trigger" — a run fails iff its canary reported >=1 trigger
-    (Task-2 decided this viable on lua: F=118/251). The differential buggy-vs-
-    fixed oracle (Task 3) was skipped because the trigger oracle is non-degenerate
-    here, so "trigger" is the only supported value."""
-    if fail_oracle != "trigger":
-        raise ValueError(f"unsupported fail-oracle {fail_oracle!r} (only 'trigger' "
-                         "is built; differential was skipped — see plan Task 3)")
+    fail_oracle decides each run's SBFL label:
+      "none" (default) — no fail signal; SBFL is not computed. Correct when no
+        valid oracle exists for the target (e.g. lua: see below).
+      "differential" — fails iff the buggy stdout digest differs from the fixed
+        reference (`fixed_bin`, built with MAGMA_ENABLE_FIXES). Reproducible
+        (trace+digest are deterministic). DEGENERATE on lua (F=0): LUA004 is a
+        debug-subsystem bug that never reaches the harness's observable output.
+      "trigger" — fails iff the canary reported >=1 trigger. NON-reproducible on
+        lua (the canary does ASLR-sensitive cross-Proto pointer arithmetic; F
+        jitters 107-122/251). A documented cross-check only.
+    So lua runs with "none"; the differential/trigger machinery is retained for
+    the first multi-library target whose bug manifests in observable output."""
+    if fail_oracle not in ("none", "differential", "trigger"):
+        raise ValueError(f"unsupported fail-oracle {fail_oracle!r}")
+    if fail_oracle == "differential" and not fixed_bin:
+        raise ValueError("differential oracle needs fixed_bin (build.sh BUILD_FIXED=1)")
+    sbfl_on = fail_oracle != "none"
     inpath = os.path.join(tmpdir, "in")
     tpath = os.path.join(tmpdir, "t")
-    gpath = os.path.join(tmpdir, "g")   # canary trigger file (file:line per fired site)
+    gpath = os.path.join(tmpdir, "g")    # canary trigger file (trigger oracle only)
+    fpath = os.path.join(tmpdir, "fin")  # scratch input for the fixed reference run
+    gp = gpath if fail_oracle == "trigger" else None
 
-    base_trace, base_out, base_trig = run(binary, seed, inpath, tpath, gpath=gpath)
+    def fail_label(buf, out, trig):
+        """SBFL fail label for one run under the active oracle."""
+        if fail_oracle == "trigger":
+            return bool(trig)
+        return run_digest(fixed_bin, buf, fpath) != out
+
+    base_trace, base_out, base_trig = run(binary, seed, inpath, tpath, gpath=gp)
     base_c = metric.compress(base_trace, bucket=True)
     base_edges = metric.edge_multiset(base_trace)
 
@@ -104,12 +142,14 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="trigg
     F = 0
     P = 0
 
-    def account(trace, trig):
+    def account(trace, buf, out, trig):
         """Fold one run (any run — baseline, diverging, or not) into the SBFL
-        spectrum. A run fails iff it triggered >=1 canary."""
+        spectrum, keyed by the oracle's pass/fail label. No-op when SBFL is off."""
         nonlocal F, P
+        if not sbfl_on:
+            return
         nodes_run = set(trace)
-        if trig:
+        if fail_label(buf, out, trig):
             F += 1
             for nd in nodes_run:
                 ef[nd] += 1
@@ -118,7 +158,7 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="trigg
             for nd in nodes_run:
                 ep[nd] += 1
 
-    account(base_trace, base_trig)
+    account(base_trace, seed, base_out, base_trig)
     obs = []
     if corpus_dir:
         perts = load_corpus(corpus_dir)
@@ -126,9 +166,9 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="trigg
         perts = perturb.generate(seed, max_pert, alphabet=PRINTABLE)
     diverged = 0
     for _, buf in perts:
-        trace, out, trig = run(binary, buf, inpath, tpath, gpath=gpath)
+        trace, out, trig = run(binary, buf, inpath, tpath, gpath=gp)
         visits.update(trace)
-        account(trace, trig)            # SBFL counts every run, before the divergence filter
+        account(trace, buf, out, trig)   # SBFL counts every run, before the divergence filter
         d = round(metric.jaccard(base_trace, trace) * 1000)
         v = em.value_distance(base_out, out)
         if d == 0 and v == 0.0:
@@ -153,7 +193,8 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="trigg
     universe = sorted(visits)
     return {"obs": obs, "visits": dict(visits), "edge_div": dict(edge_div),
             "val_div": dict(val_div),
-            "ef": dict(ef), "ep": dict(ep), "F": F, "P": P, "fail_oracle": fail_oracle,
+            "ef": dict(ef), "ep": dict(ep), "F": F, "P": P,
+            "fail_oracle": fail_oracle, "sbfl_on": sbfl_on,
             "universe": universe, "perts": len(perts), "diverged": diverged,
             "base_len": len(base_trace), "base_out": base_out}
 
@@ -195,10 +236,17 @@ def main():
                          "set (instead of byte-mutating the seed); for structured "
                          "inputs like a programming language.")
     ap.add_argument("--window", type=int, default=3)
-    ap.add_argument("--fail-oracle", choices=["trigger"], default="trigger",
-                    help="SBFL pass/fail signal. 'trigger': a run fails iff its "
-                         "canary fired (Task-2 viable on lua). Differential "
-                         "(buggy-vs-fixed) was skipped — see plan Task 3.")
+    ap.add_argument("--fail-oracle", choices=["none", "differential", "trigger"], default="none",
+                    help="SBFL pass/fail signal. 'none' (default): no oracle, SBFL "
+                         "reported N/A (correct for lua — neither standard oracle is "
+                         "valid). 'differential': buggy digest != fixed reference "
+                         "(--fixed-bin); reproducible but DEGENERATE on lua (F=0). "
+                         "'trigger': canary fired — NON-reproducible on lua (ASLR). "
+                         "Use differential on a multi-library target whose bug "
+                         "manifests in observable output.")
+    ap.add_argument("--fixed-bin", default=None,
+                    help="fixed reference binary (build.sh BUILD_FIXED=1) for the "
+                         "differential oracle.")
     ap.add_argument("-o", "--out", default=None)
     args = ap.parse_args()
 
@@ -213,8 +261,10 @@ def main():
         ap.error("need --seed-file or --seed")
 
     tmpdir = tempfile.mkdtemp(prefix="sep_eval_")
+    if args.fail_oracle == "differential" and not args.fixed_bin:
+        ap.error("--fail-oracle differential needs --fixed-bin")
     camp = campaign(args.bin, seed, args.max_pert, tmpdir, corpus_dir=args.corpus,
-                    fail_oracle=args.fail_oracle)
+                    fail_oracle=args.fail_oracle, fixed_bin=args.fixed_bin)
     universe = camp["universe"]
 
     # ground-truth labels at both granularities, plus reachability report
@@ -234,11 +284,14 @@ def main():
         "value_localized": pr.coverage(camp["val_div"], universe), # value through the SAME localization (fair vs divergence)
         "value_firstbif": pr.value(camp["obs"], universe),         # old first-bifurcation value attribution (kept for the record)
         "coverage": pr.coverage(camp["visits"], universe),
-        # spectrum-based fault localization baselines (the missing comparison)
-        "sbfl_ochiai":    sbfl.score_all(camp["ef"], camp["ep"], camp["F"], camp["P"], universe, "ochiai"),
-        "sbfl_tarantula": sbfl.score_all(camp["ef"], camp["ep"], camp["F"], camp["P"], universe, "tarantula"),
-        "sbfl_dstar":     sbfl.score_all(camp["ef"], camp["ep"], camp["F"], camp["P"], universe, "dstar"),
     }
+    # SBFL baselines: only when an oracle produced failing runs. On lua neither
+    # standard oracle is valid (see SBFL_NA_REASON), so they are reported N/A and
+    # left out of the ranking — not silently scored 0.5 on a degenerate spectrum.
+    sbfl_available = camp["sbfl_on"] and camp["F"] > 0
+    if sbfl_available:
+        for f in ("ochiai", "tarantula", "dstar"):
+            scores[f"sbfl_{f}"] = sbfl.score_all(camp["ef"], camp["ep"], camp["F"], camp["P"], universe, f)
     # random: average AUC/AP/p@k over N_RANDOM independent rankings
     rnd_runs = [pr.random_scores(universe, random.Random(s)) for s in range(N_RANDOM)]
 
@@ -266,23 +319,24 @@ def main():
                      "universe_nodes": len(universe), "baseline_trace_len": camp["base_len"],
                      "fail_oracle": camp["fail_oracle"], "F": camp["F"], "P": camp["P"]},
         "bugs": len(bugs), "reachability": reach,
+        "sbfl": {"available": sbfl_available,
+                 "predictors": ["sbfl_ochiai", "sbfl_tarantula", "sbfl_dstar"] if sbfl_available else [],
+                 "reason": None if sbfl_available else SBFL_NA_REASON},
         "results": results,
         "case_study_top_region": case_study,
         "note_baselines_deferred": "Mull (mutation score) baseline not run: separate "
                                    "toolchain, not installed; framework leaves a predictor slot.",
     }
-    if camp["F"] == 0:
-        out["note_sbfl_degenerate"] = (f"SBFL degenerate: no failing runs under the "
-                                       f"{camp['fail_oracle']} oracle (F=0); its AUCs are "
-                                       f"undefined (reported as 0.5), not a real baseline.")
     out_path = args.out or (os.path.splitext(args.graph)[0] + ".eval.json")
     json.dump(out, open(out_path, "w"), indent=2)
 
     # console report
     print(f"campaign: {camp['perts']} perturbations, {camp['diverged']} diverged, "
           f"{len(universe)} executed nodes, baseline trace {camp['base_len']}")
-    print(f"fail-oracle ({camp['fail_oracle']}): F={camp['F']} failing / P={camp['P']} passing runs"
-          + ("   [WARN] F=0 -> SBFL degenerate" if camp["F"] == 0 else ""))
+    if sbfl_available:
+        print(f"fail-oracle ({camp['fail_oracle']}): F={camp['F']} failing / P={camp['P']} passing runs")
+    else:
+        print(f"SBFL: N/A ({SBFL_NA_REASON.split('.')[0]}.)")
     print("bug-region reachability:")
     for r in reach:
         print(f"  {r['bug_id']:<8} {r['function']:<18} "
@@ -293,8 +347,11 @@ def main():
         print(f"\n== {lvl}-level ranking ({res['positives']} positive nodes) ==")
         print(f"  {'predictor':<16}{'AUC':>8}{'95%CI':>16}{'perm_p':>9}{'AP':>8}"
               f"{'p@1':>7}{'p@5':>7}{'p@10':>7}{'p@20':>7}")
-        for name in ("trajectory", "divergence", "value_localized", "value_firstbif",
-                     "coverage", "sbfl_ochiai", "sbfl_tarantula", "sbfl_dstar", "random"):
+        order = ["trajectory", "divergence", "value_localized", "value_firstbif", "coverage"]
+        if sbfl_available:
+            order += ["sbfl_ochiai", "sbfl_tarantula", "sbfl_dstar"]
+        order.append("random")
+        for name in order:
             m = res["predictors"][name]
             pa = m["precision_at"]
             ci = m.get("auc_ci")

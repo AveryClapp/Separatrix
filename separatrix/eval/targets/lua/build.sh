@@ -81,3 +81,28 @@ $CLANG -g -O0 \
   -I "$REPO" \
   -o "$WORK/lua_inst" -lm
 echo "[build] done -> $WORK/lua_inst , $WORK/lua_core.sepgraph.json , $WORK/bugs.json"
+
+# --- optional fixed reference build (differential SBFL oracle, Task 3) ---
+# Same patched+determinised sources, but with the historical fix active
+# (-DMAGMA_ENABLE_FIXES, no canaries) and NO instrumentation — we only need its
+# stdout digest, not a trace or graph. A run "fails" iff buggy and fixed digests
+# differ. Opt-in: the trigger oracle is nondeterministic (uninitialised oldpc in
+# LUA004), so the differential digest is the reproducible fail signal.
+if [ "${BUILD_FIXED:-0}" = "1" ]; then
+  echo "[build] fixed reference build (MAGMA_ENABLE_FIXES, uninstrumented)"
+  FIXFLAGS="-g -O0 -S -emit-llvm -fno-discard-value-names -I $REPO -include $HERE/magma_canary.h -DMAGMA_ENABLE_FIXES -Dluai_makeseed(L)=0u"
+  mkdir -p "$WORK/ll_fixed"
+  for f in "$REPO"/*.c; do
+    b="$(basename "$f" .c)"
+    case "$b" in lua|luac|onelua|ltests) continue ;; esac
+    $CLANG $FIXFLAGS "$f" -o "$WORK/ll_fixed/$b.ll"
+  done
+  $LLVMLINK "$WORK"/ll_fixed/*.ll -S -o "$WORK/lua_fixed_core.ll"
+  $CLANG -g -O0 \
+    "$WORK/lua_fixed_core.ll" \
+    "$HERE/lua_harness.c" \
+    "$HERE/magma_stub.c" \
+    -I "$REPO" \
+    -o "$WORK/lua_fixed" -lm
+  echo "[build] done -> $WORK/lua_fixed"
+fi

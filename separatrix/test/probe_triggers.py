@@ -52,26 +52,60 @@ def main():
     ap.add_argument("--bugs", required=True)
     ap.add_argument("--corpus", required=True)
     ap.add_argument("--seed-file", default=None)
+    ap.add_argument("--fixed-bin", default=None,
+                    help="fixed reference binary -> differential oracle: a run "
+                         "fails iff buggy and fixed stdout digests differ.")
+    ap.add_argument("--determinism-check", action="store_true",
+                    help="buggy-vs-buggy digest stability over all inputs (gates "
+                         "the differential oracle).")
     args = ap.parse_args()
+
+    inputs = load_inputs(args.corpus, args.seed_file)
+    tmpdir = tempfile.mkdtemp(prefix="sep_probe_")
+    in_a = os.path.join(tmpdir, "a")
+    in_b = os.path.join(tmpdir, "b")
+    total = len(inputs)
+
+    # --- determinism pre-check: a differential oracle is only valid if both
+    # builds are byte-deterministic per input (else inequality manufactures
+    # spurious failures). Run the SAME buggy binary twice and demand identity. ---
+    if args.determinism_check:
+        mism = [name for name, data in inputs
+                if sep_eval.run_digest(args.bin, data, in_a)
+                != sep_eval.run_digest(args.bin, data, in_b)]
+        if mism:
+            print(f"[FAIL] buggy-vs-buggy determinism: {len(mism)}/{total} inputs "
+                  f"differ across runs (e.g. {mism[:5]})")
+            print("  -> differential oracle UNSAFE; a nondeterminism source remains.")
+            return 1
+        print(f"[PASS] buggy-vs-buggy determinism: all {total} inputs stable across runs")
+        return 0
+
+    # --- differential oracle: fail iff buggy digest != fixed reference digest ---
+    if args.fixed_bin:
+        F = sum(1 for _, data in inputs
+                if sep_eval.run_digest(args.bin, data, in_a)
+                != sep_eval.run_digest(args.fixed_bin, data, in_b))
+        print(f"differential oracle (buggy vs fixed):")
+        print(f"  failing runs (digest differs): {F} / {total}")
+        print("\ndecision:")
+        print(f"  {'VIABLE' if F > 0 else 'DEGENERATE (no differing outputs)'} under differential")
+        return 0 if F > 0 else 1
 
     bugs = json.load(open(args.bugs))
     # (basename, line) -> bug_id ; site label for the table
     site2bug = {(_base(b["file"]), b["line"]): b["bug_id"] for b in bugs}
     site_label = {b["bug_id"]: f"{_base(b['file'])}:{b['line']}" for b in bugs}
 
-    inputs = load_inputs(args.corpus, args.seed_file)
-    tmpdir = tempfile.mkdtemp(prefix="sep_probe_")
-    inpath = os.path.join(tmpdir, "in")
     tpath = os.path.join(tmpdir, "t")
     gpath = os.path.join(tmpdir, "trig")
 
     trig_runs = {b["bug_id"]: 0 for b in bugs}   # runs that triggered this bug
     failing = 0                                   # runs that triggered >= 1 bug
     unmatched = {}                                # (basename,line) -> count, no bug match
-    total = len(inputs)
 
     for _, data in inputs:
-        _, _, trig = sep_eval.run(args.bin, data, inpath, tpath, gpath=gpath)
+        _, _, trig = sep_eval.run(args.bin, data, in_a, tpath, gpath=gpath)
         bugs_hit = set()
         for s in trig:
             key = parse_trigger(s)
@@ -112,7 +146,8 @@ def main():
     else:
         print(f"  trigger oracle BORDERLINE (F == {failing}) -> proceed with "
               "small-N caveat; consider Task 3 as a cross-check.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)
