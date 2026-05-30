@@ -109,6 +109,12 @@ position × fault_type`, with the injected step index per instance) is generated
 build (Task 3) and **committed before any signal is scored** (Task 4). Both signals are then run on
 **exactly** that frozen manifest. No instance is added, dropped, or reselected after any score is seen.
 
+> **Realized set (recorded before scoring):** the locked rule yielded **107 retained instances** (of 108
+> candidate; one 0.75/F2_drop case did not flip). This exceeds the rough "~25–40" expectation above because
+> the injection flip-retention rate is ~100%, not the ~30–40% guessed. The RULE (12 tasks × 3 positions ×
+> 3 fault types, success→fail filter, seed 20260530) was locked, not the count; 107 is its deterministic
+> consequence — more statistical power, not a chosen number. Depth gate: median 13 ≥ 12 (PASS).
+
 **Retained-set composition reporting (locked):** the frozen manifest commit MUST report the retained-set
 composition as a **count table by fault position {0.25, 0.50, 0.75} × fault type {F1, F2, F3}**. The
 success→fail inclusion filter (§2) is expected to be survivorship-biased — late faults may flip the

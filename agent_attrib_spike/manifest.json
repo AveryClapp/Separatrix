@@ -1,0 +1,772 @@
+{
+  "kb_seed": 20260530,
+  "n_tasks": 12,
+  "depth_gate": 12,
+  "depth_min": 13,
+  "depth_median": 13.0,
+  "depth_max": 13,
+  "depth_gate_pass": true,
+  "n_instances": 107,
+  "composition_by_position_x_fault": {
+    "0.25|F1_value": 12,
+    "0.25|F2_drop": 12,
+    "0.25|F3_toolarg": 12,
+    "0.5|F1_value": 12,
+    "0.5|F2_drop": 12,
+    "0.5|F3_toolarg": 12,
+    "0.75|F1_value": 12,
+    "0.75|F2_drop": 11,
+    "0.75|F3_toolarg": 12
+  },
+  "instances": [
+    {
+      "task_seed": 0,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 0,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 0,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 0,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 0,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 0,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 0,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 0,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 0,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 1,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 1,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 1,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 1,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 1,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 1,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 1,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 1,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 1,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 2,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 2,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 2,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 2,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 2,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 2,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 2,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 2,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 2,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 3,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 3,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 3,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 3,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 3,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 3,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 3,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 3,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 3,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 4,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 4,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 4,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 4,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 4,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 4,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 4,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 4,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 4,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 5,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 5,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 5,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 5,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 5,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 5,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 5,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 5,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 6,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 6,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 6,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 6,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 6,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 6,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 6,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 6,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 6,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 7,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 7,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 7,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 7,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 7,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 7,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 7,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 7,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 7,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 8,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 8,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 8,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 8,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 8,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 8,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 8,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 8,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 8,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 9,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 9,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 9,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 9,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 9,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 9,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 9,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 9,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 9,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 10,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 10,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 10,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 10,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 10,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 10,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 10,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 10,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 10,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 11,
+      "position": 0.25,
+      "fault_type": "F1_value",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 11,
+      "position": 0.25,
+      "fault_type": "F2_drop",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 11,
+      "position": 0.25,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 3,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 11,
+      "position": 0.5,
+      "fault_type": "F1_value",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 11,
+      "position": 0.5,
+      "fault_type": "F2_drop",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 11,
+      "position": 0.5,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 6,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 11,
+      "position": 0.75,
+      "fault_type": "F1_value",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 11,
+      "position": 0.75,
+      "fault_type": "F2_drop",
+      "injected_idx": 9,
+      "trace_depth": 13
+    },
+    {
+      "task_seed": 11,
+      "position": 0.75,
+      "fault_type": "F3_toolarg",
+      "injected_idx": 9,
+      "trace_depth": 13
+    }
+  ]
+}
