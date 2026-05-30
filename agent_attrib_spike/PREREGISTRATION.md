@@ -9,6 +9,15 @@ bar, and the external-validity caveat **before** any outcome-flip or cascade-div
 No dimension below may be changed after seeing results. If a number disappoints, the outcome is recorded
 honestly and the fallback is executed — the bar does not move.
 
+> **Integrity timeline.** The GO bar (§5), trace/fault set (§2–§3), and signals (§4) were committed before
+> any scoring. During Task-3 build, single-trace **smoke tests** (machinery verification, NOT the
+> pre-registered experiment) revealed two mechanism bugs — replay silently erased injected faults, and a
+> capable distractor model leaked the global answer into late steps. Both were fixed as method
+> corrections: the §4 alternative-generation scope was clarified (distractors see only a step's local tool
+> reading) and faults were made persistent. **The GO bar and the frozen eval set were NOT touched.** The
+> pre-registered experiment (Task 4) runs on the frozen manifest, which is created and committed only
+> after this point, before any manifest-level score is read.
+
 ---
 
 ## 0. Scope (locked)
@@ -111,13 +120,18 @@ composition makes any imbalance visible up front rather than letting it silently
 - **Primary (causal): `outcome_flip(trace, step, n_alts)`** — generate `n_alts = 5` plausible
   *alternative* outputs for the step from a capable model, replay each, score = fraction that flip
   fail→success. Rank steps descending. Predicted decisive step = argmax.
-  - **Blind alternative-generation (locked — anti-oracle-leakage):** the alternative-generating model is
-    given ONLY the trace context up to and including the step being repaired (question, prior steps, the
-    step's own prompt/inputs). It is **never** shown `ground_truth`, the gold final answer, or any
-    success signal. If it could see the answer, the decisive step would trivially flip because the model
-    reproduces the correct value — outcome-flip would become circular oracle-leakage, not a causal
-    signal. A step is decisive if SOME *plausible* better output (proposed blind) saves the task. This
-    blindness is asserted in code and verified by inspecting the alternative-generation prompt.
+  - **Blind alternative-generation (locked — anti-oracle-leakage):** the alternative set for a step is
+    the step's **locally-correct tool output** (the canonical counterfactual repair — the agent doing
+    its own job, which is oracle-LIGHT, not leakage) plus capable-model **local distractors**. The
+    distractor model is given ONLY the step's sub-task and its own tool reading — **not** the overall
+    task, the trace, `ground_truth`, the gold final answer, or any success signal. This scoping is
+    load-bearing: given the full task a capable model trivially "repairs" any late aggregation step by
+    computing and emitting the globally-correct total, so EVERY downstream step would flip (the
+    oracle-leakage degeneracy). Restricting distractors to local misreadings of the step's own tool
+    reading makes them structurally incapable of reproducing the final answer, so only the genuinely
+    faulted step's repair flips the task. A step is decisive if its locally-correct output (or a
+    plausible local alternative) saves the task. Asserted in code (`signals._gen_distractors` sees only
+    sub-task + tool reading) and verifiable by inspecting the prompt.
 - **Confound null (cascade): `cascade_divergence(trace, step)`** — apply a *neutral* perturbation
   (paraphrase/minor edit, not a repair) to the step, replay, score = embedding distance summed over the
   downstream steps. Rank steps descending. (Predicted to rank early/high-cascade steps high regardless

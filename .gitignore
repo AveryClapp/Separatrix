@@ -54,3 +54,6 @@ __pycache__/
 # Local-only working dirs (intentionally untracked)
 docs/
 spike/
+
+# Secrets
+.env
