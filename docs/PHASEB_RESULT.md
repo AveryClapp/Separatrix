@@ -48,12 +48,31 @@ That assumption is **false on the aligned target**:
   the moderately-executed bug region **below chance (0.16)**. Raw divergence (0.75)
   and even raw coverage (0.84) both beat it.
 
-**The deep reason:** coverage does not distinguish *bug-relevant* from
-*bug-irrelevant* control-flow activity. There is no fault-agnostic reweighting *by
-coverage alone* that separates "confound divergence" (md4c's content-driven hot
-loops) from "signal divergence" (lua's bug-co-located hot nodes), because on aligned
-targets the signal itself lives at moderately-hot nodes. The confound and the signal
-are not separable on the coverage axis.
+**The deep reason (Discussion finding):** coverage does not distinguish
+*bug-relevant* from *bug-irrelevant* control-flow activity. On the aligned target the
+fault co-locates with *moderately-hot* nodes — **faults inhabit hot code as readily as
+confounds do** — so dividing by execution count cannot separate "confound divergence"
+(md4c's content-driven hot loops) from "signal divergence" (lua's bug-co-located hot
+nodes). Coverage carries no information that separates the two. This is the **clean
+limit of coverage-only reweighting in the oracle-free regime.**
+
+## Scope of this negative (what was, and was not, tested)
+
+This is a negative about **coverage-based conditioning**, *not* a claim that the
+alignment limitation is irremovable in general:
+
+- The conditioned signal **collapsed onto `inverse_coverage`** on md4c
+  (0.1649 ≈ 0.1646), so the *only axis actually exercised was coverage* — the
+  experiment tested "can dividing by execution count fix the confound," and the answer
+  is no.
+- The prereg also *named* a concentration/dispersion mechanism (steering off
+  zero-divergence bytes). That mechanism was **not exercised here and is not being
+  tested** — `edge_div/visits` does not implement it. Do not read this result as
+  evidence about concentration/dispersion either way.
+- The binding constraint on elevating the alignment theory from descriptive to
+  predictive is **evidence breadth (n=1 aligned target)**, which a confound-fix would
+  not move. We are therefore not pursuing a further conditioning variant; the scope
+  stays descriptive.
 
 ## What stands
 
@@ -65,9 +84,11 @@ are not separable on the coverage axis.
   experiment confirms it should **not** be coverage-conditioned.
 - The **md4c misalignment** stays a *documented limitation*, not a fixed one, and is
   framed as the dual of coincidental correctness (per `THEORY_EVIDENCE.md`).
-- A clean, pre-registered negative: the alignment limitation is **not removable by a
-  coverage-only reweighting**. This is a substantive result for the Discussion, not a
-  null.
+- A clean, pre-registered negative: **coverage-based conditioning fails** — dividing
+  divergence by execution count does not isolate the fault and destroys the localizer
+  on the aligned target. This is a substantive result for the Discussion, not a null.
+  (It is *not* a claim that the limitation is irremovable in general — see "Scope of
+  this negative".)
 
 ## Artifacts
 
@@ -76,12 +97,12 @@ are not separable on the coverage axis.
   `inverse_coverage`), scored in one pass alongside raw divergence/coverage/SBFL.
 - Eval outputs: `spike/lua_port/lua_phaseB.eval.json`,
   `/tmp/md4c_proto/work/md4c_phaseB.eval.json`.
-- md4c reachability: bug region `md_link_label_cmp` REACHED (13 region nodes);
-  differential oracle F=1 (in028) / P=36.
+- md4c reachability: bug region `md_link_label_cmp` REACHED (9 region nodes,
+  fully reached by in028); differential oracle F=1 (in028) / P=36.
 
-> **Reproducibility note (flag for cleanup):** the md4c instrumented binary, graph,
-> and corpus currently live under `/tmp/md4c_proto/work/` (survived from the
-> Milestone-1 prototype). They are *not* yet a committed first-class target like
-> lua/sqlite. If md4c's Phase-B numbers are to appear in the paper, the md4c port
-> should be promoted to `separatrix/eval/targets/md4c/` (build.sh + harness +
-> bugs.json) so the result is rebuildable from source.
+> **Reproducibility:** the md4c port has been promoted from `/tmp` to a first-class
+> rebuildable target at `separatrix/eval/targets/md4c/` (`build.sh` clones
+> md4c @ `da5821a` + applies the BugsC++ #4 buggy patch; md2html's own CLI is the
+> harness; `bugs.json` + `corpus/` vendored). The rebuilt instrumented binary
+> reproduces the original byte-for-byte (identical HTML, identical 5594-token trace
+> on in028).
