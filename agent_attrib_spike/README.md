@@ -13,7 +13,33 @@ Who&When is output-only static logs). See `TASK1_FEASIBILITY.md`.
 This is a **controlled kill-test of the cascade confound** and a generality
 demonstration for the theory paper — NOT validation of the real agentic
 application (blocked by the Task-1 finding). Evidence is mechanism-level:
-synthetic system, author-injected faults.
+synthetic system, author-injected faults. The **non-tautological finding** is
+that the autoregressive-cascade confound is *real* (perturbing an early step
+diverges everything downstream regardless of fault) yet the counterfactual
+outcome-flip primitive *avoids it* — the two signals separate decisively
+(Δ_MRR=0.62, tie-corrected one-sided Wilcoxon p<1e-4), and the separation is
+largest exactly where the confound provably fails (late faults). What blocks
+the real-agent claim is the absence of any **public replayable** agent-failure
+benchmark — Who&When ships output-only static logs, not a re-executable
+orchestration runner (see `TASK1_FEASIBILITY.md`).
+
+## Verdict + reproduction
+
+GO on the pre-registered synthetic kill-test (`PREREGISTRATION.md`). Frozen,
+pinned artifacts: `manifest.json` (107-instance locked eval set) and
+`results.json` (the scored verdict). Reproduce **offline, deterministically, no
+API key, no spend** from the committed LLM cache:
+
+```bash
+./reproduce.sh        # extracts cache_llm.tar.gz, runs unit tests, re-scores the
+                      # frozen manifest, asserts results.json is bit-exact
+```
+
+The cache (`cache_llm.tar.gz`, ~9 MB) keys every agent/alt/embedding call on
+`(model, messages, temperature)`, so temp-0 replay is byte-identical and the
+verdict regenerates exactly. Live regeneration (cache miss) would require
+`OPENAI_API_KEY` and is **not** bit-exact (gpt-4o drift); the committed cache is
+the determinism guarantee.
 
 ## Components
 
