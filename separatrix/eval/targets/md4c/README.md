@@ -42,10 +42,38 @@ node-id trace to that file. No separate harness TU is required.
 `corpus/` holds the 36 markdown inputs (`in*.md`) used as the perturbation seeds /
 suite population.
 
-## Scope note
+## Suite localization (the divergence-vs-SBFL datapoint)
 
-This target was the **misalignment pole** in the descriptive alignment study and the
-subject of the Phase-B coverage-conditioning negative. Its primary divergence-vs-SBFL
-datapoint is the Milestone-1 **suite** setting (failing-vs-passing over the BugsC++
-examples), where divergence ties SBFL. The Phase-B perturbation-**campaign** number is
-a separate setting and must not be mixed with the suite number in one table.
+`suite_eval.py <work_dir>` regenerates the line-level divergence-vs-SBFL comparison
+from the canonical build under an explicit, committed oracle+filter rule (the rule is
+documented in the script header — task-correctness against `expected/`, with the
+version-drift both-fail drop). Build both binaries first:
+
+```bash
+./build.sh <work_dir>                 # md2html_inst + graph
+BUILD_FIXED=1 ./build.sh <work_dir>   # md2html_fixed (clean reference)
+python3 suite_eval.py <work_dir>
+```
+
+Regenerated population: **29 passing, 1 failing (in028), 6 dropped** (version-drift:
+5, 13, 18, 22, 25, 32) = 36. Line-level first-GT ranks out of 1433 scored lines:
+
+| signal | rank | note |
+|---|---|---|
+| divergence(excess) — **cited** | **29 / 1433** (top 2%, EXAM 0.020) | discriminative: failing excess over passing-pair variation |
+| SBFL ochiai / tarantula / dstar | 17 / 20 / 16 | benchmark supplies the one failing test |
+| divergence(raw) — *not cited* | 16 / 1433 | non-discriminative; inflated by the input-content confound |
+
+**md4c is a misalignment pole, not a positive.** The discriminative divergence still
+localizes the bug to the top 2%, but it does **not** beat SBFL here (best 16/1433) —
+in contrast to lua, where divergence dominates. The earlier "ties SBFL at rank 16"
+reading came from the *non-discriminative raw* failing-vs-passing divergence, which is
+inflated by content difference between in028 and the passing inputs; the discriminative
+form (the signal used everywhere else) gives 29, and that is the cited number.
+
+## Scope: suite vs campaign — do not mix
+
+This is the **suite** setting. The separate Phase-B perturbation-**campaign** number
+(divergence region-AUC 0.75) belongs only to the coverage-conditioning negative
+(`docs/PHASEB_RESULT.md`) and must not appear in the same table as these suite ranks —
+different population, different oracle, different granularity.
