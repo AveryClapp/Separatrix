@@ -74,6 +74,35 @@ def test_localized_value_identical_traces_credit_nothing():
     assert metric.localized_value(e, e, 0.7) == {}
 
 
+def test_conditioned_divergence_is_per_visit_rate():
+    # cond[n] = edge_div[n] / visits[n], over the universe.
+    #   node 1: 6/3 = 2.0   node 2: 3/3 = 1.0   node 3: absent in edge_div -> 0/10 = 0.0
+    edge_div = {1: 6, 2: 3}
+    visits = {1: 3, 2: 3, 3: 10}
+    universe = [1, 2, 3]
+    assert metric.conditioned_divergence(edge_div, visits, universe) == {1: 2.0, 2: 1.0, 3: 0.0}
+
+
+def test_conditioned_divergence_demotes_hot_confound():
+    # The Phase-B mechanism: a HOT node with large raw divergence mass (100) but a
+    # huge visit count (1000) must rank BELOW a rarely-executed bug node with modest
+    # mass (10) once normalized by coverage. Raw edge_div would rank hot > bug;
+    # conditioning flips it (0.1 < 0.5). This is the confound-suppression intent.
+    edge_div = {"hot": 100, "bug": 10}
+    visits = {"hot": 1000, "bug": 20}
+    cond = metric.conditioned_divergence(edge_div, visits, ["hot", "bug"])
+    assert cond == {"hot": 0.1, "bug": 0.5}
+    assert cond["bug"] > cond["hot"]
+
+
+def test_conditioned_divergence_restricted_to_universe():
+    # edge_div may carry source nodes outside the universe (e.g. filtered out);
+    # only universe nodes are scored, and each universe node divides by its visits.
+    edge_div = {1: 5, 99: 8}
+    visits = {1: 2, 99: 4}
+    assert metric.conditioned_divergence(edge_div, visits, [1]) == {1: 2.5}
+
+
 def _run():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0

@@ -154,6 +154,21 @@ def localized_value(base_edges, pert_edges, v):
     return out
 
 
+def conditioned_divergence(edge_div, visits, universe):
+    """Coverage-conditioned divergence: per-visit divergence rate (Phase B).
+
+    cond[n] = edge_div[n] / visits[n] for each node n in `universe`. Normalizing
+    the accumulated divergence mass by execution count suppresses the *content
+    confound* — hot, high-coverage nodes (e.g. a per-character codepoint loop)
+    that accumulate large divergence simply because their iteration count scales
+    with input content, not because they are faulty. Both inputs are computable
+    WITHOUT a fault oracle, so the conditioned signal is fault-agnostic.
+
+    `universe = sorted(visits)`, so visits[n] >= 1 for every n (no division by
+    zero). A universe node absent from `edge_div` scores 0 (no divergence)."""
+    return {n: edge_div.get(n, 0) / visits[n] for n in universe}
+
+
 def bifurcation_tok(a, b):
     """First differing token between two compressed sequences (None if equal)."""
     m = min(len(a), len(b))

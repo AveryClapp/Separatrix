@@ -281,6 +281,9 @@ def main():
     scores = {
         "trajectory": pr.trajectory(camp["obs"], universe),       # first-bifurcation
         "divergence": pr.coverage(camp["edge_div"], universe),     # divergence-localization
+        "divergence_conditioned": metric.conditioned_divergence(   # Phase B: per-visit divergence rate (fault-agnostic confound suppression)
+            camp["edge_div"], camp["visits"], universe),
+        "inverse_coverage": {n: 1.0 / camp["visits"][n] for n in universe},  # Phase B anti-degeneracy baseline (PHASEB_PREREG.md §2)
         "value_localized": pr.coverage(camp["val_div"], universe), # value through the SAME localization (fair vs divergence)
         "value_firstbif": pr.value(camp["obs"], universe),         # old first-bifurcation value attribution (kept for the record)
         "coverage": pr.coverage(camp["visits"], universe),
@@ -375,7 +378,8 @@ def main():
         print(f"\n== {lvl}-level ranking ({res['positives']} positive nodes) ==")
         print(f"  {'predictor':<16}{'AUC':>8}{'95%CI':>16}{'perm_p':>9}{'AP':>8}"
               f"{'p@1':>7}{'p@5':>7}{'p@10':>7}{'p@20':>7}")
-        order = ["trajectory", "divergence", "value_localized", "value_firstbif", "coverage"]
+        order = ["trajectory", "divergence", "divergence_conditioned", "inverse_coverage",
+                 "value_localized", "value_firstbif", "coverage"]
         if sbfl_available:
             order += ["sbfl_ochiai", "sbfl_tarantula", "sbfl_dstar"]
         order.append("random")
