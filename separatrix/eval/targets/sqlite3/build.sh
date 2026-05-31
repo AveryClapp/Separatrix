@@ -24,6 +24,8 @@ SEPROOT="$(cd "$HERE/../../../.." && pwd)"
 LUATGT="$HERE/../lua"                         # reuse canary header + stub + extractor
 
 CLANG="${CLANG:-/opt/homebrew/opt/llvm/bin/clang}"
+SEP="$SEPROOT/build/separatrix"
+RT="$SEPROOT/separatrix/runtime/sep_rt.c"
 PATCHDIR="$MAGMA/targets/sqlite3/patches/bugs"
 TARBALL="$WORK/sqlite.tar.gz"
 REPO="$WORK/repo"
@@ -79,5 +81,17 @@ if [ "${ORACLE_PROBE:-0}" = "1" ]; then
   exit 0
 fi
 
-echo "[build] instrumented pipeline not implemented yet; use ORACLE_PROBE=1 for the pre-probe."
-exit 1
+# --- instrumented pipeline (oracle-free divergence-vs-coverage, lua-style) ---
+# Compile the buggy amalgamation to IR (canaries live), instrument + emit the
+# behavioral graph, then link the file-mode SQL harness + trace runtime + canary
+# stub. The result reads a SQL file from argv[1], honors $SEP_TRACE, prints the
+# value-space digest. Bugs live in sqlite3.c, so only the amalgamation is
+# instrumented; the harness is linked as plain C (mirrors the lua target).
+echo "[build] instrumented build: amalgamation -> IR -> analyze -> link"
+IRFLAGS="-g -O0 -S -emit-llvm -fno-discard-value-names $SQLITE_FLAGS -I $AMALG \
+-include $LUATGT/magma_canary.h -DMAGMA_ENABLE_CANARIES"
+$CLANG $IRFLAGS "$AMALG/sqlite3.c" -o "$WORK/sqlite3_buggy.ll"
+"$SEP" analyze "$WORK/sqlite3_buggy.ll" -o "$WORK/sqlite3_core"
+$CLANG -g -O0 "$WORK/sqlite3_core.inst.ll" "$HERE/sql_harness.c" "$LUATGT/magma_stub.c" "$RT" \
+  -I "$AMALG" -lpthread -ldl -lm -o "$WORK/sqlite3_inst"
+echo "[build] done -> $WORK/sqlite3_inst , $WORK/sqlite3_core.sepgraph.json , $WORK/bugs.json"

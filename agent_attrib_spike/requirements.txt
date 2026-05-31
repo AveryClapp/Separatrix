@@ -1,0 +1,5 @@
+# Offline reproduction (./reproduce.sh) needs only:
+numpy
+scipy
+# Live regeneration on cache miss (NOT needed for the committed verdict) also needs:
+# openai

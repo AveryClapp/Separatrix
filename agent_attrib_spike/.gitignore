@@ -1,0 +1,10 @@
+# External clones — not part of this repo
+whoandwhen_repo/
+hf_whoandwhen/
+agentracer_repo/
+__pycache__/
+*.pyc
+# Secrets + build env — never commit
+.env
+.venv/
+.cache_llm/
