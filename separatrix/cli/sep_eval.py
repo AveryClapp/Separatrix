@@ -135,21 +135,29 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="none"
 
     visits = collections.Counter(base_trace)
     edge_div = collections.Counter()   # per-node control-flow divergence mass
+    edge_div_edges = collections.Counter()  # per-EDGE divergence mass (Phase C dispersion weighting)
     val_div = collections.Counter()    # per-node value-distance mass (localized attribution)
+    # Excess-divergence split: per-node divergence mass accumulated separately over
+    # failing vs passing perturbations, with their diverged-run counts (the campaign
+    # port of the suite div_excess signal). Populated only when an oracle is active.
+    edge_div_fail = collections.Counter()
+    edge_div_pass = collections.Counter()
+    ndiv_fail = 0
+    ndiv_pass = 0
     # SBFL spectrum: ef/ep = #failing/#passing runs that executed each node.
     ef = collections.Counter()
     ep = collections.Counter()
     F = 0
     P = 0
 
-    def account(trace, buf, out, trig):
+    def account(trace, is_fail):
         """Fold one run (any run — baseline, diverging, or not) into the SBFL
         spectrum, keyed by the oracle's pass/fail label. No-op when SBFL is off."""
         nonlocal F, P
         if not sbfl_on:
             return
         nodes_run = set(trace)
-        if fail_label(buf, out, trig):
+        if is_fail:
             F += 1
             for nd in nodes_run:
                 ef[nd] += 1
@@ -158,7 +166,8 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="none"
             for nd in nodes_run:
                 ep[nd] += 1
 
-    account(base_trace, seed, base_out, base_trig)
+    base_is_fail = fail_label(seed, base_out, base_trig) if sbfl_on else False
+    account(base_trace, base_is_fail)
     obs = []
     if corpus_dir:
         perts = load_corpus(corpus_dir)
@@ -168,7 +177,8 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="none"
     for _, buf in perts:
         trace, out, trig = run(binary, buf, inpath, tpath, gpath=gp)
         visits.update(trace)
-        account(trace, buf, out, trig)   # SBFL counts every run, before the divergence filter
+        is_fail = fail_label(buf, out, trig) if sbfl_on else False
+        account(trace, is_fail)          # SBFL counts every run, before the divergence filter
         d = round(metric.jaccard(base_trace, trace) * 1000)
         v = em.value_distance(base_out, out)
         if d == 0 and v == 0.0:
@@ -183,8 +193,26 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="none"
         # where it first diverges). Shared helper so the eval and the shipped tool
         # (sep_run.py) cannot drift on the signal that defines the contribution.
         pert_edges = metric.edge_multiset(trace)
-        for src, mass in metric.localized_divergence(base_edges, pert_edges).items():
+        ld = metric.localized_divergence(base_edges, pert_edges)
+        for src, mass in ld.items():
             edge_div[src] += mass
+        # excess-divergence split: route this run's divergence mass to the failing
+        # or passing pool by the oracle label, for divergence_excess (only when an
+        # oracle is active; identical mass to edge_div, just partitioned).
+        if sbfl_on:
+            if is_fail:
+                ndiv_fail += 1
+                for src, mass in ld.items():
+                    edge_div_fail[src] += mass
+            else:
+                ndiv_pass += 1
+                for src, mass in ld.items():
+                    edge_div_pass[src] += mass
+        # per-edge form for dispersion weighting (Phase C): how this run's
+        # divergence splits across each node's outgoing edges. Accumulated in
+        # parallel so the node-level edge_div above stays byte-identical.
+        for e, mass in metric.localized_divergence_edges(base_edges, pert_edges).items():
+            edge_div_edges[e] += mass
         # value-localization: credit the value-distance v through the SAME node
         # set, so value-vs-divergence isolates signal, not attribution method.
         for src, val in metric.localized_value(base_edges, pert_edges, v).items():
@@ -192,6 +220,9 @@ def campaign(binary, seed, max_pert, tmpdir, corpus_dir=None, fail_oracle="none"
 
     universe = sorted(visits)
     return {"obs": obs, "visits": dict(visits), "edge_div": dict(edge_div),
+            "edge_div_edges": dict(edge_div_edges),
+            "edge_div_fail": dict(edge_div_fail), "edge_div_pass": dict(edge_div_pass),
+            "ndiv_fail": ndiv_fail, "ndiv_pass": ndiv_pass,
             "val_div": dict(val_div),
             "ef": dict(ef), "ep": dict(ep), "F": F, "P": P,
             "fail_oracle": fail_oracle, "sbfl_on": sbfl_on,
@@ -283,6 +314,8 @@ def main():
         "divergence": pr.coverage(camp["edge_div"], universe),     # divergence-localization
         "divergence_conditioned": metric.conditioned_divergence(   # Phase B: per-visit divergence rate (fault-agnostic confound suppression)
             camp["edge_div"], camp["visits"], universe),
+        "divergence_dispersion": metric.dispersion_weighted_divergence(  # Phase C: edge_div * outgoing-edge entropy (fault-agnostic confound suppression, dispersion axis)
+            camp["edge_div_edges"], universe),
         "inverse_coverage": {n: 1.0 / camp["visits"][n] for n in universe},  # Phase B anti-degeneracy baseline (PHASEB_PREREG.md §2)
         "value_localized": pr.coverage(camp["val_div"], universe), # value through the SAME localization (fair vs divergence)
         "value_firstbif": pr.value(camp["obs"], universe),         # old first-bifurcation value attribution (kept for the record)
@@ -295,6 +328,15 @@ def main():
     if sbfl_available:
         for f in ("ochiai", "tarantula", "dstar"):
             scores[f"sbfl_{f}"] = sbfl.score_all(camp["ef"], camp["ep"], camp["F"], camp["P"], universe, f)
+    # divergence_excess: campaign port of the cited md4c suite signal — failing-run
+    # divergence in excess of the passing-run baseline. Needs the oracle to split
+    # runs (>=1 diverged failing run); N/A on oracle-free targets like lua (where
+    # no pass/fail label exists), reported alongside SBFL's N/A rather than faked.
+    excess_available = camp["sbfl_on"] and camp["ndiv_fail"] > 0
+    if excess_available:
+        scores["divergence_excess"] = metric.excess_divergence(
+            camp["edge_div_fail"], camp["ndiv_fail"],
+            camp["edge_div_pass"], camp["ndiv_pass"], universe)
     # random: average AUC/AP/p@k over N_RANDOM independent rankings
     rnd_runs = [pr.random_scores(universe, random.Random(s)) for s in range(N_RANDOM)]
 
@@ -378,8 +420,10 @@ def main():
         print(f"\n== {lvl}-level ranking ({res['positives']} positive nodes) ==")
         print(f"  {'predictor':<16}{'AUC':>8}{'95%CI':>16}{'perm_p':>9}{'AP':>8}"
               f"{'p@1':>7}{'p@5':>7}{'p@10':>7}{'p@20':>7}")
-        order = ["trajectory", "divergence", "divergence_conditioned", "inverse_coverage",
-                 "value_localized", "value_firstbif", "coverage"]
+        order = ["trajectory", "divergence", "divergence_conditioned", "divergence_dispersion",
+                 "inverse_coverage", "value_localized", "value_firstbif", "coverage"]
+        if "divergence_excess" in scores:
+            order.append("divergence_excess")
         if sbfl_available:
             order += ["sbfl_ochiai", "sbfl_tarantula", "sbfl_dstar"]
         order.append("random")

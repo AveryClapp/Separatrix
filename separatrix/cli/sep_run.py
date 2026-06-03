@@ -49,7 +49,8 @@ def main():
     ap.add_argument("--metric", choices=("exact", "jaccard"), default="exact",
                     help="exact: Levenshtein + fast-approx validation (slow, for "
                          "validation/short traces). jaccard: O(n) edge-set scoring "
-                         "(fast, for long traces; validated rho>=0.98 vs exact).")
+                         "(fast, for long traces; high rank-correlation vs exact, "
+                         "Spearman ~0.95, see test/test_metric_scale.py).")
     args = ap.parse_args()
 
     g = json.load(open(args.graph))
@@ -116,8 +117,10 @@ def main():
         }
     else:
         validation = {"mode": "jaccard-scale",
-                      "note": "O(n) edge-set scoring; validated rho>=0.98 vs exact "
-                              "on long traces (see exact-mode runs)"}
+                      "note": "O(n) edge-set scoring; high rank-correlation vs exact "
+                              "compressed-Levenshtein on long traces (Spearman ~0.95, "
+                              "test/test_metric_scale.py). Exact is intractable on "
+                              "non-compressing long traces, which is why jaccard exists."}
     out = {
         "binary": os.path.basename(args.bin), "seed": args.seed,
         "metric": f"trajectory-divergence-localized/{args.metric}",

@@ -103,6 +103,86 @@ def test_conditioned_divergence_restricted_to_universe():
     assert metric.conditioned_divergence(edge_div, visits, [1]) == {1: 2.5}
 
 
+def test_localized_divergence_edges_keeps_full_edge():
+    # The per-EDGE form of localized_divergence: same deltas, but keyed by the
+    # whole edge (s,t) instead of collapsed to the source node s. Needed to
+    # measure how a node's divergence is distributed across its outgoing edges.
+    base = metric.edge_multiset([1, 2, 3, 2, 3])  # (1,2):1 (2,3):2 (3,2):1
+    pert = metric.edge_multiset([1, 2, 4])        # (1,2):1 (2,4):1
+    assert metric.localized_divergence_edges(base, pert) == {(2, 3): 2, (3, 2): 1, (2, 4): 1}
+
+
+def test_localized_divergence_edges_collapses_to_node_form():
+    # Summing the per-edge form by source node MUST reproduce localized_divergence
+    # exactly — the two helpers cannot drift.
+    base = metric.edge_multiset([5, 6, 7, 6, 7, 8])
+    pert = metric.edge_multiset([5, 6, 9, 9, 9])
+    per_edge = metric.localized_divergence_edges(base, pert)
+    by_node = {}
+    for (s, _t), m in per_edge.items():
+        by_node[s] = by_node.get(s, 0) + m
+    assert by_node == metric.localized_divergence(base, pert)
+
+
+def test_dispersion_single_edge_node_scores_zero():
+    # A hot loop whose divergence is pure count-inflation on ONE outgoing edge
+    # (the back-edge) has H=0 -> suppressed entirely, regardless of mass.
+    edge_div_by_edge = {("hot", "loop"): 100}
+    assert metric.dispersion_weighted_divergence(edge_div_by_edge, ["hot"]) == {"hot": 0.0}
+
+
+def test_dispersion_weights_by_outgoing_entropy():
+    import math
+    # bug node: divergence split evenly over TWO outgoing edges (a branch flip)
+    #   total=10, p=.5/.5, H=ln2 -> score = 10*ln2
+    # hot node: 100 mass on one edge -> H=0 -> 0
+    edge_div_by_edge = {("hot", "x"): 100, ("bug", "a"): 5, ("bug", "b"): 5}
+    out = metric.dispersion_weighted_divergence(edge_div_by_edge, ["hot", "bug"])
+    assert out["hot"] == 0.0
+    assert abs(out["bug"] - 10 * math.log(2)) < 1e-12
+    assert out["bug"] > out["hot"]   # the headline intent: branch-flip beats hot loop
+
+
+def test_dispersion_skewed_split_scores_below_even_split():
+    # Same total mass, but an even 2-way split has higher entropy than a skewed
+    # one, so the evenly-flipping branch outranks the lopsided one.
+    even = metric.dispersion_weighted_divergence({("n", "a"): 5, ("n", "b"): 5}, ["n"])["n"]
+    skew = metric.dispersion_weighted_divergence({("n", "a"): 9, ("n", "b"): 1}, ["n"])["n"]
+    assert even > skew > 0.0
+
+
+def test_dispersion_restricted_to_universe_and_absent_scores_zero():
+    # Edges from non-universe sources are ignored; a universe node with no
+    # divergence edges scores 0 (not KeyError).
+    edge_div_by_edge = {("a", "x"): 3, ("a", "y"): 3, ("z", "w"): 9}
+    out = metric.dispersion_weighted_divergence(edge_div_by_edge, ["a", "cold"])
+    assert set(out) == {"a", "cold"}
+    assert out["cold"] == 0.0
+    assert out["a"] > 0.0
+
+
+def test_excess_divergence_is_failing_mean_minus_passing_mean():
+    # Per-node mean divergence-to-baseline among FAILING runs, minus the same among
+    # PASSING runs, clamped at 0 (the campaign port of suite div_excess).
+    #   node "bug": fail mass 20 over 2 fail runs = 10 ; pass mass 6 over 3 = 2 ; excess 8
+    #   node "hot": fail 30/2 = 15 ; pass 60/3 = 20 ; 15-20 < 0 -> clamp 0
+    div_fail = {"bug": 20, "hot": 30}
+    div_pass = {"bug": 6, "hot": 60}
+    out = metric.excess_divergence(div_fail, 2, div_pass, 3, ["bug", "hot"])
+    assert out == {"bug": 8.0, "hot": 0.0}
+
+
+def test_excess_divergence_absent_node_scores_zero():
+    out = metric.excess_divergence({"a": 4}, 2, {}, 2, ["a", "cold"])
+    assert out == {"a": 2.0, "cold": 0.0}
+
+
+def test_excess_divergence_no_passing_runs_is_pure_failing_mean():
+    # P=0 -> passing baseline is 0, excess collapses to the failing mean (no subtraction).
+    out = metric.excess_divergence({"a": 10}, 5, {}, 0, ["a"])
+    assert out == {"a": 2.0}
+
+
 def _run():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0

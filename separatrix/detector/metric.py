@@ -13,6 +13,7 @@ over a cycle-compressed, log-bucketed token sequence:
 The first differing token's leading node ID is the *bifurcation point* — the
 graph node where the trajectories first diverge — used for attribution.
 """
+import math
 
 MAX_PERIOD = 6
 BAND = 8
@@ -138,6 +139,81 @@ def localized_divergence(base_edges, pert_edges):
         delta = abs(base_edges.get(e, 0) - pert_edges.get(e, 0))
         if delta:
             out[e[0]] = out.get(e[0], 0) + delta
+    return out
+
+
+def localized_divergence_edges(base_edges, pert_edges):
+    """Per-EDGE trajectory divergence for one perturbation — the per-edge form of
+    localized_divergence. Identical deltas, but keyed by the whole edge (src,dst)
+    instead of collapsed to the source node, so a caller can see HOW a node's
+    divergence is distributed across its outgoing edges (needed for dispersion
+    weighting). Summing this by source node reproduces localized_divergence."""
+    out = {}
+    for e in set(base_edges) | set(pert_edges):
+        delta = abs(base_edges.get(e, 0) - pert_edges.get(e, 0))
+        if delta:
+            out[e] = out.get(e, 0) + delta
+    return out
+
+
+def dispersion_weighted_divergence(edge_div_by_edge, universe):
+    """Dispersion-weighted divergence (Phase C confound suppression).
+
+        disp[n] = edge_div[n] * H(outgoing-edge divergence distribution of n)
+
+    where `edge_div[n]` is the total divergence mass on n's outgoing edges (the
+    same quantity the `divergence` predictor uses) and H is the Shannon entropy
+    (nats) of how that mass splits across those edges.
+
+    Mechanism (the hypothesis): a content-driven hot loop diverges only by
+    *iterating more* — its mass piles onto a SINGLE outgoing edge (the back-edge),
+    so H = 0 and it is suppressed. A genuine fault FLIPS a branch under
+    perturbation, spreading mass across >= 2 outgoing edges, so H > 0 and it is
+    preserved. Unlike coverage-conditioning (Phase B, edge_div/visits), this
+    targets the *shape* of a node's outgoing divergence, not its execution count —
+    a different axis, and still oracle-free (computed purely from baseline-vs-
+    perturbation edge deltas).
+
+    `edge_div_by_edge` is the campaign accumulation of localized_divergence_edges
+    (keyed by full edge). Only `universe` nodes are scored; a universe node with no
+    divergence edges scores 0."""
+    by_node = {}
+    for (src, _dst), mass in edge_div_by_edge.items():
+        by_node.setdefault(src, []).append(mass)
+    out = {}
+    for n in universe:
+        masses = by_node.get(n)
+        total = sum(masses) if masses else 0
+        if total <= 0:
+            out[n] = 0.0
+            continue
+        h = 0.0
+        for m in masses:
+            if m > 0:
+                p = m / total
+                h -= p * math.log(p)
+        out[n] = total * h
+    return out
+
+
+def excess_divergence(div_fail, n_fail, div_pass, n_pass, universe):
+    """Excess divergence over the passing baseline (campaign port of the cited md4c
+    suite signal `div_excess`).
+
+        excess[n] = max(0, mean_failing_divergence[n] - mean_passing_divergence[n])
+
+    where mean_*_divergence[n] is the per-node localized-divergence mass (vs the
+    campaign baseline) accumulated over the FAILING / PASSING perturbations and
+    divided by their counts. Subtracting the passing mean controls for the
+    input-content variation that passing inputs also induce, so the credit reflects
+    what is special about the *failing* runs — the discriminative form, not the raw
+    failing divergence (which is inflated by content difference). Requires a fail
+    oracle (n_fail > 0); n_pass = 0 leaves the failing mean un-subtracted."""
+    out = {}
+    for n in universe:
+        f = div_fail.get(n, 0) / n_fail if n_fail else 0.0
+        p = div_pass.get(n, 0) / n_pass if n_pass else 0.0
+        out[n] = max(0.0, f - p)
     return out
 
 

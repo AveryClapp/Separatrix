@@ -73,7 +73,26 @@ form (the signal used everywhere else) gives 29, and that is the cited number.
 
 ## Scope: suite vs campaign — do not mix
 
-This is the **suite** setting. The separate Phase-B perturbation-**campaign** number
-(divergence region-AUC 0.75) belongs only to the coverage-conditioning negative
-(`docs/PHASEB_RESULT.md`) and must not appear in the same table as these suite ranks —
-different population, different oracle, different granularity.
+This is the **suite** setting. The separate perturbation-**campaign** numbers
+(divergence region-AUC 0.75; see below) belong only to the campaign docs and must not
+appear in the same table as these suite ranks — different population, different oracle,
+different granularity.
+
+Campaign-setting predictor AUCs (region-level, differential oracle, F=1/P=36), from
+`docs/PHASEB_RESULT.md` (Phase B) and `docs/PHASEC_RESULT.md` (Phase C):
+
+| predictor | region-AUC | note |
+|---|---|---|
+| divergence (raw, oracle-free) | 0.746 | the contribution; top region a content helper |
+| divergence_conditioned (Phase B) | 0.165 | coverage-conditioning NO-GO |
+| divergence_dispersion (Phase C) | 0.637 | entropy-weighting NO-GO |
+| **divergence_excess** (oracle-required) | **0.889** | failing-run divergence minus passing baseline; ported from the suite `div_excess` into `sep_eval.py` |
+| coverage | 0.835 | |
+| SBFL ochiai/tarantula/dstar | 0.924 | needs the oracle |
+
+`divergence_excess` is the campaign port of the cited suite signal: it raises md4c
+region-AUC from 0.75 (raw) to 0.89, beating coverage and approaching SBFL — but it
+**requires a fail oracle** (it splits runs into failing/passing), so it is *not* in
+the oracle-free class that is Separatrix's headline. Its #1 region is still the
+`md_unicode_bsearch__` content confound (consistent with the suite's "top 2%, not
+rank 1"). On oracle-free targets (lua) it is correctly reported N/A, alongside SBFL.
